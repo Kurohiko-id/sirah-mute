@@ -1,4 +1,3 @@
-#![allow(dead_code)]
 use crate::config::Lang;
 use windows::Win32::Globalization::GetUserDefaultUILanguage;
 
@@ -45,6 +44,7 @@ pub enum Key {
 }
 
 impl Key {
+    #[cfg(test)]
     pub const ALL: [Key; 16] = [
         Key::Muted,
         Key::Unmuted,

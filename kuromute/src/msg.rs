@@ -4,8 +4,9 @@ use windows::core::{PCWSTR, w};
 /// wparam: 1 muted, 0 unmuted.
 pub const WM_APP_MUTE: u32 = WM_APP + 1;
 pub const WM_APP_DEVICES: u32 = WM_APP + 2;
-/// lparam: `Box<Release>` as raw pointer; receiver takes ownership back.
+/// Result is in `app::UPDATE` (not lparam); wparam 1 = manual check.
 pub const WM_APP_UPDATE: u32 = WM_APP + 3;
+#[allow(dead_code)] // reserved; set_default workers log their own result
 pub const WM_APP_DEFAULTS_SET: u32 = WM_APP + 4;
 pub const WM_APP_TRAY: u32 = WM_APP + 5;
 

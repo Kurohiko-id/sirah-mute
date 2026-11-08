@@ -22,6 +22,7 @@ pub fn validate(h: &Hotkey) -> Result<(), HotkeyError> {
     }
 }
 
+#[allow(dead_code)] // used by settings UI (plan 2)
 pub fn leaks_into_games(h: &Hotkey) -> bool { h.mods != 0 || h.vk == 0x7B }
 
 const FKEYS: [&str; 24] = [
@@ -44,6 +45,7 @@ pub fn key_name(vk: u32) -> Option<&'static str> {
     })
 }
 
+#[allow(dead_code)] // used by settings UI (plan 2)
 pub const SELECTABLE_KEYS: &[u32] = &[
     0x70, 0x71, 0x72, 0x73, 0x74, 0x75, 0x76, 0x77, 0x78, 0x79, 0x7A, 0x7B,
     0x7C, 0x7D, 0x7E, 0x7F, 0x80, 0x81, 0x82, 0x83, 0x84, 0x85, 0x86, 0x87,

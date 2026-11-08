@@ -1,4 +1,5 @@
-#![allow(dead_code)]
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+mod app;
 mod audio;
 mod autostart;
 mod config;
@@ -19,10 +20,19 @@ mod update;
 use windows::Win32::Foundation::HWND;
 use windows::Win32::System::Com::{COINIT_APARTMENTTHREADED, CoInitializeEx};
 use windows::Win32::System::Console::{ATTACH_PARENT_PROCESS, AttachConsole};
+use windows::Win32::UI::HiDpi::{
+    DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2, SetProcessDpiAwarenessContext,
+};
 
-fn list_devices() {
+fn attach_console() {
     unsafe {
         let _ = AttachConsole(ATTACH_PARENT_PROCESS);
+    }
+}
+
+fn list_devices() {
+    attach_console();
+    unsafe {
         let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
     }
     let a = match audio::Audio::new(HWND::default()) {
@@ -44,7 +54,37 @@ fn list_devices() {
 }
 
 fn main() {
-    if std::env::args().any(|a| a == "--list-devices") {
-        list_devices();
+    unsafe {
+        let _ = SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
     }
+    log::init(&config::data_dir().join("logs"));
+    log::install_panic_hook();
+    let code = match std::env::args().nth(1).as_deref() {
+        Some("--list-devices") => {
+            list_devices();
+            0
+        }
+        Some("--toggle") => {
+            attach_console();
+            if app::post_to_core(msg::MSG_TOGGLE) {
+                0
+            } else {
+                println!("not running");
+                1
+            }
+        }
+        Some("--settings") => {
+            // Plan 1 stub: edit config.json by hand, then tell the core to reload.
+            if let Err(e) = std::process::Command::new("notepad.exe")
+                .arg(config::config_path())
+                .status()
+            {
+                log!("settings: notepad failed: {e}");
+            }
+            app::post_to_core(msg::MSG_RELOAD);
+            0
+        }
+        _ => app::run(),
+    };
+    std::process::exit(code);
 }

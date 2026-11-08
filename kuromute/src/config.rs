@@ -1,20 +1,17 @@
 use serde::{Deserialize, Deserializer, Serialize};
 use std::{fs, io, io::Write, path::{Path, PathBuf}};
 
-#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Debug)]
-pub enum Position { TopLeft, TopCenter, TopRight, BottomLeft, BottomCenter, BottomRight }
-#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Debug)]
-pub enum GuardMode { Off, Notify, AutoRevert }
-#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Debug)]
-pub enum Lang { Auto, En, Id }
+#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Debug, Default)]
+pub enum Position { TopLeft, TopCenter, TopRight, BottomLeft, #[default] BottomCenter, BottomRight }
+#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Debug, Default)]
+pub enum GuardMode { Off, Notify, #[default] AutoRevert }
+#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Debug, Default)]
+pub enum Lang { #[default] Auto, En, Id }
 
 /// `mods` uses Win32 `MOD_*`; never stores `MOD_NOREPEAT`.
 #[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Debug)]
 pub struct Hotkey { pub mods: u32, pub vk: u32 }
 
-impl Default for Position { fn default() -> Self { Position::BottomCenter } }
-impl Default for GuardMode { fn default() -> Self { GuardMode::AutoRevert } }
-impl Default for Lang { fn default() -> Self { Lang::Auto } }
 impl Default for Hotkey { fn default() -> Self { Hotkey { mods: 0x2 | 0x1, vk: 0x4D } } }
 
 /// Unknown/invalid value -> field default instead of failing the whole file.

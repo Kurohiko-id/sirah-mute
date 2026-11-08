@@ -358,6 +358,7 @@ fn has_family(dw: &IDWriteFactory, name: PCWSTR) -> bool {
     }
 }
 
+#[derive(Default)]
 pub struct Indicators {
     popups: Vec<Popup>,
     strips: Vec<HWND>,

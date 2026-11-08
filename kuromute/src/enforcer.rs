@@ -24,6 +24,7 @@ pub enum Action {
     GiveUp,
 }
 
+#[derive(Default)]
 pub struct Enforcer {
     history: VecDeque<Instant>,
     paused_until: Option<Instant>,
