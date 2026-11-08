@@ -9,6 +9,7 @@ mod log;
 mod migrate;
 mod monitors;
 mod msg;
+mod overlay;
 mod policy_config;
 mod sound;
 mod update;
