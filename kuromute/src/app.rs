@@ -24,9 +24,9 @@ use windows::Win32::UI::Shell::{NIN_BALLOONUSERCLICK, NIN_SELECT, ShellExecuteW}
 use windows::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DefWindowProcW, DispatchMessageW, FindWindowW, GetMessageW, KillTimer, MSG,
     PBT_APMRESUMEAUTOMATIC, PostMessageW, PostQuitMessage, RegisterClassExW,
-    RegisterWindowMessageW, SW_SHOWNORMAL, SetTimer, TranslateMessage, WINDOW_EX_STYLE,
-    WM_CONTEXTMENU, WM_DISPLAYCHANGE, WM_DPICHANGED, WM_HOTKEY, WM_LBUTTONUP, WM_POWERBROADCAST,
-    WM_SETTINGCHANGE, WM_TIMER, WNDCLASSEXW, WS_OVERLAPPED,
+    RegisterWindowMessageW, SPI_SETWORKAREA, SW_SHOWNORMAL, SetTimer, TranslateMessage,
+    WINDOW_EX_STYLE, WM_CONTEXTMENU, WM_DISPLAYCHANGE, WM_DPICHANGED, WM_HOTKEY, WM_LBUTTONUP,
+    WM_POWERBROADCAST, WM_SETTINGCHANGE, WM_TIMER, WNDCLASSEXW, WS_OVERLAPPED,
 };
 use windows::core::{HSTRING, PCWSTR, w};
 
@@ -78,6 +78,18 @@ pub fn diff(o: &Config, n: &Config) -> Changes {
             || o.guard_enabled != n.guard_enabled,
         autostart: o.autostart != n.autostart,
     }
+}
+
+/// Indicator state to show after a re-watch, or None if what's visible doesn't change.
+/// "Not present" counts as unmuted, so a replug that comes back unmuted shows nothing.
+fn indicator_change(old: Option<bool>, new: Option<bool>) -> Option<bool> {
+    let (o, n) = (old == Some(true), new == Some(true));
+    (o != n).then_some(n)
+}
+
+/// Only work-area changes move overlays; other WM_SETTINGCHANGE broadcasts are noise.
+fn settingchange_affects_layout(wparam: usize) -> bool {
+    wparam == SPI_SETWORKAREA.0 as usize
 }
 
 /// Percent-encodes everything except RFC 3986 unreserved characters.
@@ -286,8 +298,13 @@ impl State {
         };
     }
 
+    /// Re-targets the mute watch (replug / mic change) and syncs indicators + tray.
     fn rewatch(&mut self) {
-        self.last_muted = self.audio.watch_mute(self.cfg.mic_id.as_deref());
+        let new = self.audio.watch_mute(self.cfg.mic_id.as_deref());
+        let old = std::mem::replace(&mut self.last_muted, new);
+        if let Some(muted) = indicator_change(old, new) {
+            self.ind.show(self.hwnd, muted);
+        }
         self.update_tray();
     }
 
@@ -366,9 +383,6 @@ impl State {
         self.register_hotkey();
         self.rebuild_indicators();
         self.rewatch();
-        if self.last_muted == Some(true) {
-            self.ind.show(self.hwnd, true);
-        }
         if self.cfg.force_on_startup {
             spawn_set_defaults(self.configured_defaults(true, true));
         }
@@ -399,8 +413,8 @@ impl State {
 
     fn on_mute(&mut self, muted: bool) {
         // Volume changes post this too; only a real state change counts.
+        // A pending toggle stays pending until the real change arrives.
         if self.last_muted == Some(muted) {
-            self.log_latency();
             return;
         }
         self.last_muted = Some(muted);
@@ -499,7 +513,7 @@ impl State {
             self.register_hotkey();
         }
         if ch.mic {
-            self.last_muted = self.audio.watch_mute(self.cfg.mic_id.as_deref());
+            self.rewatch();
         }
         if ch.indicators {
             self.rebuild_indicators();
@@ -520,7 +534,8 @@ impl State {
             WM_HOTKEY => self.on_toggle(),
             WM_APP_MUTE => self.on_mute(wp.0 != 0),
             WM_APP_DEVICES => self.arm(TIMER_DEVICES, 300),
-            WM_DISPLAYCHANGE | WM_SETTINGCHANGE | WM_DPICHANGED => self.arm(TIMER_DISPLAY, 500),
+            WM_DISPLAYCHANGE | WM_DPICHANGED => self.arm(TIMER_DISPLAY, 500),
+            WM_SETTINGCHANGE if settingchange_affects_layout(wp.0) => self.arm(TIMER_DISPLAY, 500),
             WM_POWERBROADCAST if wp.0 == PBT_APMRESUMEAUTOMATIC as usize => {
                 self.arm(TIMER_DISPLAY, 500);
                 self.arm(TIMER_DEVICES, 300);
@@ -783,6 +798,23 @@ mod tests {
             ..a.clone()
         };
         assert!(diff(&a, &b).guard);
+    }
+
+    #[test]
+    fn indicator_change_cases() {
+        assert_eq!(indicator_change(None, Some(true)), Some(true));
+        assert_eq!(indicator_change(Some(true), None), Some(false));
+        assert_eq!(indicator_change(Some(true), Some(false)), Some(false));
+        assert_eq!(indicator_change(Some(false), Some(true)), Some(true));
+        assert_eq!(indicator_change(None, Some(false)), None);
+        assert_eq!(indicator_change(Some(true), Some(true)), None);
+    }
+
+    #[test]
+    fn settingchange_only_workarea() {
+        assert!(settingchange_affects_layout(0x2F));
+        assert!(!settingchange_affects_layout(0));
+        assert!(!settingchange_affects_layout(0x14)); // SPI_SETDESKWALLPAPER
     }
 
     #[test]
