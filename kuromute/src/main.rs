@@ -1,5 +1,6 @@
 #![allow(dead_code)]
 mod audio;
+mod autostart;
 mod config;
 mod enforcer;
 mod geometry;
@@ -12,6 +13,7 @@ mod msg;
 mod overlay;
 mod policy_config;
 mod sound;
+mod tray;
 mod update;
 
 use windows::Win32::Foundation::HWND;
