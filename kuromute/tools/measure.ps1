@@ -34,8 +34,9 @@ function Show-Latency {
 if ($LatencyOnly) { Show-Latency; exit 0 }
 
 if ($Toggle -gt 0) {
+    if ($Toggle % 2 -ne 0) { Write-Host '-Toggle must be even so the mic ends in its starting state'; exit 1 }
     for ($i = 0; $i -lt $Toggle; $i++) {
-        & $Exe --toggle
+        & $Exe --toggle | Out-Null  # GUI-subsystem exe: piping makes PowerShell wait
         if ($LASTEXITCODE -ne 0) {
             Write-Host "toggle $($i + 1)/$Toggle failed (exit $LASTEXITCODE): core not running?"
             exit 1
