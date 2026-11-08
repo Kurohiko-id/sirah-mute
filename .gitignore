@@ -5,3 +5,4 @@ publish-lite/
 Output/
 *.user
 .superpowers/
+kuromute/target/
