@@ -7,5 +7,6 @@ mod i18n;
 mod log;
 mod migrate;
 mod monitors;
+mod update;
 
 fn main() {}
