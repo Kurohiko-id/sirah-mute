@@ -4,3 +4,4 @@ publish/
 publish-lite/
 Output/
 *.user
+.superpowers/
