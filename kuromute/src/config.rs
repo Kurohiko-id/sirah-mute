@@ -90,27 +90,37 @@ pub fn data_dir() -> PathBuf {
 pub fn config_path() -> PathBuf { data_dir().join("config.json") }
 
 #[derive(PartialEq, Debug)]
-pub enum LoadOutcome { Loaded(Config), Missing, Corrupt { backup: PathBuf } }
+pub enum LoadOutcome {
+    Loaded(Config),
+    Missing,
+    Corrupt { backup: PathBuf },
+    /// I/O failure (locked, access denied, failed backup rename). Caller must keep its
+    /// in-memory config and NOT save.
+    Unreadable(String),
+}
 
 pub fn load(path: &Path) -> LoadOutcome {
     let bytes = match fs::read(path) {
         Ok(b) => b,
         Err(e) if e.kind() == io::ErrorKind::NotFound => return LoadOutcome::Missing,
-        Err(_) => return corrupt(path),
+        Err(e) => return LoadOutcome::Unreadable(e.to_string()),
     };
     match serde_json::from_slice::<Config>(&bytes) {
-        Ok(c) => LoadOutcome::Loaded(c),
-        Err(_) => corrupt(path),
+        Ok(c) => LoadOutcome::Loaded(c.sanitized()),
+        Err(e) if e.is_io() => LoadOutcome::Unreadable(e.to_string()),
+        Err(_) => backup_corrupt(path),
     }
 }
 
-fn corrupt(path: &Path) -> LoadOutcome {
+fn backup_corrupt(path: &Path) -> LoadOutcome {
     let mut name = path.file_name().unwrap_or_default().to_os_string();
     name.push(".bad");
     let backup = path.with_file_name(name);
-    let _ = fs::remove_file(&backup); // rename-over-existing is not portable
-    let _ = fs::rename(path, &backup);
-    LoadOutcome::Corrupt { backup }
+    // fs::rename replaces an existing target on Windows
+    match fs::rename(path, &backup) {
+        Ok(()) => LoadOutcome::Corrupt { backup },
+        Err(e) => LoadOutcome::Unreadable(format!("backup rename failed: {e}")),
+    }
 }
 
 pub fn save(path: &Path, cfg: &Config) -> io::Result<()> {
@@ -181,6 +191,37 @@ mod tests {
             o => panic!("{o:?}"),
         }
         assert!(!p.exists());
+        fs::remove_dir_all(&d).unwrap();
+    }
+    #[test]
+    fn stale_bad_is_replaced() {
+        let d = tmp("stale");
+        let p = d.join("config.json");
+        fs::write(d.join("config.json.bad"), "old").unwrap();
+        fs::write(&p, "{broken").unwrap();
+        assert!(matches!(load(&p), LoadOutcome::Corrupt { .. }));
+        assert_eq!(fs::read_to_string(d.join("config.json.bad")).unwrap(), "{broken");
+        fs::remove_dir_all(&d).unwrap();
+    }
+    #[test]
+    fn save_replaces_existing() {
+        let d = tmp("over");
+        let p = d.join("config.json");
+        save(&p, &Config::default()).unwrap();
+        let c = Config { border_thickness: 12, ..Default::default() };
+        save(&p, &c).unwrap();
+        assert_eq!(load(&p), LoadOutcome::Loaded(c));
+        fs::remove_dir_all(&d).unwrap();
+    }
+    #[test]
+    fn load_clamps_out_of_range() {
+        let d = tmp("clamp");
+        let p = d.join("config.json");
+        fs::write(&p, r#"{"popup_scale": 5.0}"#).unwrap();
+        match load(&p) {
+            LoadOutcome::Loaded(c) => assert_eq!(c.popup_scale, 2.0),
+            o => panic!("{o:?}"),
+        }
         fs::remove_dir_all(&d).unwrap();
     }
     #[test]
