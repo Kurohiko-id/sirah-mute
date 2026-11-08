@@ -1,8 +1,8 @@
 use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::sync::mpsc::{Sender, channel};
 use std::sync::OnceLock;
+use std::sync::mpsc::{Sender, channel};
 use windows::Win32::System::SystemInformation::GetLocalTime;
 
 const MAX_BYTES: u64 = 1_000_000;
@@ -22,7 +22,15 @@ fn format_ts(y: u16, mo: u16, d: u16, h: u16, mi: u16, s: u16, ms: u16) -> Strin
 
 fn now() -> String {
     let t = unsafe { GetLocalTime() };
-    format_ts(t.wYear, t.wMonth, t.wDay, t.wHour, t.wMinute, t.wSecond, t.wMilliseconds)
+    format_ts(
+        t.wYear,
+        t.wMonth,
+        t.wDay,
+        t.wHour,
+        t.wMinute,
+        t.wSecond,
+        t.wMilliseconds,
+    )
 }
 
 fn numbered(dir: &Path, n: usize) -> PathBuf {
@@ -45,7 +53,11 @@ fn rotate(dir: &Path, max_bytes: u64, keep: usize) {
 
 fn append(dir: &Path, msg: &str) {
     rotate(dir, MAX_BYTES, KEEP);
-    if let Ok(mut f) = OpenOptions::new().create(true).append(true).open(dir.join("kuromute.log")) {
+    if let Ok(mut f) = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(dir.join("kuromute.log"))
+    {
         let _ = writeln!(f, "{} {}", now(), msg);
     }
 }
@@ -80,7 +92,10 @@ pub fn write_sync(msg: &str) {
 pub fn install_panic_hook() {
     let default = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
-        write_sync(&format!("PANIC: {info}\n{}", std::backtrace::Backtrace::force_capture()));
+        write_sync(&format!(
+            "PANIC: {info}\n{}",
+            std::backtrace::Backtrace::force_capture()
+        ));
         default(info);
     }));
 }
@@ -99,7 +114,10 @@ mod tests {
 
     #[test]
     fn ts_format() {
-        assert_eq!(format_ts(2026, 11, 9, 5, 15, 2, 123), "2026-11-09T05:15:02.123");
+        assert_eq!(
+            format_ts(2026, 11, 9, 5, 15, 2, 123),
+            "2026-11-09T05:15:02.123"
+        );
     }
 
     #[test]
@@ -111,7 +129,10 @@ mod tests {
         }
         rotate(&d, 5, 3);
         assert!(!d.join("kuromute.log").exists());
-        assert_eq!(fs::read_to_string(d.join("kuromute.log.1")).unwrap(), "0123456789");
+        assert_eq!(
+            fs::read_to_string(d.join("kuromute.log.1")).unwrap(),
+            "0123456789"
+        );
         assert_eq!(fs::read_to_string(d.join("kuromute.log.2")).unwrap(), "a");
         assert_eq!(fs::read_to_string(d.join("kuromute.log.3")).unwrap(), "b");
         assert!(!d.join("kuromute.log.4").exists());

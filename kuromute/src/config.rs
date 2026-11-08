@@ -1,22 +1,57 @@
 use serde::{Deserialize, Deserializer, Serialize};
-use std::{fs, io, io::Write, path::{Path, PathBuf}};
+use std::{
+    fs, io,
+    io::Write,
+    path::{Path, PathBuf},
+};
 
 #[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Debug, Default)]
-pub enum Position { TopLeft, TopCenter, TopRight, BottomLeft, #[default] BottomCenter, BottomRight }
+pub enum Position {
+    TopLeft,
+    TopCenter,
+    TopRight,
+    BottomLeft,
+    #[default]
+    BottomCenter,
+    BottomRight,
+}
 #[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Debug, Default)]
-pub enum GuardMode { Off, Notify, #[default] AutoRevert }
+pub enum GuardMode {
+    Off,
+    Notify,
+    #[default]
+    AutoRevert,
+}
 #[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Debug, Default)]
-pub enum Lang { #[default] Auto, En, Id }
+pub enum Lang {
+    #[default]
+    Auto,
+    En,
+    Id,
+}
 
 /// `mods` uses Win32 `MOD_*`; never stores `MOD_NOREPEAT`.
 #[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Debug)]
-pub struct Hotkey { pub mods: u32, pub vk: u32 }
+pub struct Hotkey {
+    pub mods: u32,
+    pub vk: u32,
+}
 
-impl Default for Hotkey { fn default() -> Self { Hotkey { mods: 0x2 | 0x1, vk: 0x4D } } }
+impl Default for Hotkey {
+    fn default() -> Self {
+        Hotkey {
+            mods: 0x2 | 0x1,
+            vk: 0x4D,
+        }
+    }
+}
 
 /// Unknown/invalid value -> field default instead of failing the whole file.
 fn or_default<'de, D, T>(d: D) -> Result<T, D::Error>
-where D: Deserializer<'de>, T: Deserialize<'de> + Default {
+where
+    D: Deserializer<'de>,
+    T: Deserialize<'de> + Default,
+{
     Ok(T::deserialize(d).unwrap_or_default())
 }
 
@@ -75,7 +110,11 @@ impl Default for Config {
 
 impl Config {
     pub fn sanitized(mut self) -> Config {
-        self.popup_scale = if self.popup_scale.is_nan() { 1.0 } else { self.popup_scale.clamp(0.5, 2.0) };
+        self.popup_scale = if self.popup_scale.is_nan() {
+            1.0
+        } else {
+            self.popup_scale.clamp(0.5, 2.0)
+        };
         self.border_thickness = self.border_thickness.clamp(1, 30);
         self
     }
@@ -84,13 +123,17 @@ impl Config {
 pub fn data_dir() -> PathBuf {
     PathBuf::from(std::env::var_os("APPDATA").unwrap_or_default()).join("MuteMic")
 }
-pub fn config_path() -> PathBuf { data_dir().join("config.json") }
+pub fn config_path() -> PathBuf {
+    data_dir().join("config.json")
+}
 
 #[derive(PartialEq, Debug)]
 pub enum LoadOutcome {
     Loaded(Config),
     Missing,
-    Corrupt { backup: PathBuf },
+    Corrupt {
+        backup: PathBuf,
+    },
     /// I/O failure (locked, access denied, failed backup rename). Caller must keep its
     /// in-memory config and NOT save.
     Unreadable(String),
@@ -121,7 +164,9 @@ fn backup_corrupt(path: &Path) -> LoadOutcome {
 }
 
 pub fn save(path: &Path, cfg: &Config) -> io::Result<()> {
-    if let Some(dir) = path.parent() { fs::create_dir_all(dir)?; }
+    if let Some(dir) = path.parent() {
+        fs::create_dir_all(dir)?;
+    }
     let mut name = path.file_name().unwrap_or_default().to_os_string();
     name.push(".tmp");
     let tmp = path.with_file_name(name);
@@ -148,27 +193,52 @@ mod tests {
     #[test]
     fn defaults_match_spec() {
         let c = Config::default();
-        assert_eq!(c.hotkey, Hotkey { mods: 0x3, vk: 0x4D });
+        assert_eq!(
+            c.hotkey,
+            Hotkey {
+                mods: 0x3,
+                vk: 0x4D
+            }
+        );
         assert_eq!(c.guard_mode, GuardMode::AutoRevert);
         assert_eq!((c.border_thickness, c.popup_scale), (6, 1.0));
     }
     #[test]
     fn sanitize_clamps() {
-        let c = Config { popup_scale: 5.0, border_thickness: 0, ..Default::default() }.sanitized();
+        let c = Config {
+            popup_scale: 5.0,
+            border_thickness: 0,
+            ..Default::default()
+        }
+        .sanitized();
         assert_eq!((c.popup_scale, c.border_thickness), (2.0, 1));
-        let c = Config { popup_scale: f32::NAN, border_thickness: 99, ..Default::default() }.sanitized();
+        let c = Config {
+            popup_scale: f32::NAN,
+            border_thickness: 99,
+            ..Default::default()
+        }
+        .sanitized();
         assert_eq!((c.popup_scale, c.border_thickness), (1.0, 30));
     }
     #[test]
     fn bad_enum_field_falls_back_not_corrupt() {
-        let c: Config = serde_json::from_str(r#"{"popup_position":"Middle","border_thickness":11,"zzz":1}"#).unwrap();
-        assert_eq!((c.popup_position, c.border_thickness), (Position::BottomCenter, 11));
+        let c: Config =
+            serde_json::from_str(r#"{"popup_position":"Middle","border_thickness":11,"zzz":1}"#)
+                .unwrap();
+        assert_eq!(
+            (c.popup_position, c.border_thickness),
+            (Position::BottomCenter, 11)
+        );
     }
     #[test]
     fn save_then_load_roundtrip_and_no_tmp_left() {
         let d = tmp("rt");
         let p = d.join("config.json");
-        let c = Config { mic_id: Some("{0.0.1}".into()), border_thickness: 9, ..Default::default() };
+        let c = Config {
+            mic_id: Some("{0.0.1}".into()),
+            border_thickness: 9,
+            ..Default::default()
+        };
         save(&p, &c).unwrap();
         assert_eq!(load(&p), LoadOutcome::Loaded(c));
         assert!(!d.join("config.json.tmp").exists());
@@ -197,7 +267,10 @@ mod tests {
         fs::write(d.join("config.json.bad"), "old").unwrap();
         fs::write(&p, "{broken").unwrap();
         assert!(matches!(load(&p), LoadOutcome::Corrupt { .. }));
-        assert_eq!(fs::read_to_string(d.join("config.json.bad")).unwrap(), "{broken");
+        assert_eq!(
+            fs::read_to_string(d.join("config.json.bad")).unwrap(),
+            "{broken"
+        );
         fs::remove_dir_all(&d).unwrap();
     }
     #[test]
@@ -205,7 +278,10 @@ mod tests {
         let d = tmp("over");
         let p = d.join("config.json");
         save(&p, &Config::default()).unwrap();
-        let c = Config { border_thickness: 12, ..Default::default() };
+        let c = Config {
+            border_thickness: 12,
+            ..Default::default()
+        };
         save(&p, &c).unwrap();
         assert_eq!(load(&p), LoadOutcome::Loaded(c));
         fs::remove_dir_all(&d).unwrap();
@@ -223,6 +299,9 @@ mod tests {
     }
     #[test]
     fn missing_file_is_missing() {
-        assert_eq!(load(&std::env::temp_dir().join("kuromute-nonexistent/config.json")), LoadOutcome::Missing);
+        assert_eq!(
+            load(&std::env::temp_dir().join("kuromute-nonexistent/config.json")),
+            LoadOutcome::Missing
+        );
     }
 }

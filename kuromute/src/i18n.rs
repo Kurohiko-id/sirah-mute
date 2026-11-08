@@ -90,15 +90,21 @@ pub fn t(l: ResolvedLang, k: Key) -> &'static str {
         (MenuExit, Id) => "Keluar",
         (DriftNotify, En) => "Default audio device changed from your pick. Click to set it back.",
         (DriftNotify, Id) => "Device audio default berubah dari pilihanmu. Klik untuk balikin.",
-        (GuardPaused, En) => "Another app keeps changing your audio device. Guard paused for 5 minutes.",
-        (GuardPaused, Id) => "Ada app lain yang terus ganti device audio. Penjagaan dijeda 5 menit.",
+        (GuardPaused, En) => {
+            "Another app keeps changing your audio device. Guard paused for 5 minutes."
+        }
+        (GuardPaused, Id) => {
+            "Ada app lain yang terus ganti device audio. Penjagaan dijeda 5 menit."
+        }
         (UpdateAvailable, En) => "Update available: {ver}. Click to open.",
         (UpdateAvailable, Id) => "Ada update: {ver}. Klik untuk buka.",
         (UpToDate, En) => "You're up to date.",
         (UpToDate, Id) => "Sudah versi terbaru.",
         (HotkeyFailed, En) => "Shortcut {key} is in use by another app. Pick another in Settings.",
         (HotkeyFailed, Id) => "Tombol {key} sudah dipakai app lain. Ganti di Pengaturan.",
-        (ConfigCorrupt, En) => "Settings file was damaged and has been reset. Backup: config.json.bad",
+        (ConfigCorrupt, En) => {
+            "Settings file was damaged and has been reset. Backup: config.json.bad"
+        }
         (ConfigCorrupt, Id) => "File pengaturan rusak dan direset. Cadangan: config.json.bad",
         (AppName, _) => "Kuro Mute & Force Mic",
     }

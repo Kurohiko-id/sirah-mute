@@ -94,9 +94,8 @@ fn pct(s: &str) -> String {
 }
 
 fn report_bug_url(build: &str) -> String {
-    let body = format!(
-        "**App version:** {VERSION}\n**OS build:** {build}\n\nDescribe the bug here:\n"
-    );
+    let body =
+        format!("**App version:** {VERSION}\n**OS build:** {build}\n\nDescribe the bug here:\n");
     format!(
         "https://github.com/Kurohiko-id/Kuro-Mute-Force-Mic-Input/issues/new?labels=bug&title=Bug%3A%20&body={}",
         pct(&body)
@@ -474,7 +473,10 @@ impl State {
         let new = match config::load(&config_path()) {
             LoadOutcome::Loaded(c) => c,
             LoadOutcome::Corrupt { backup } => {
-                log!("reload: corrupt, backup {}; keeping current", backup.display());
+                log!(
+                    "reload: corrupt, backup {}; keeping current",
+                    backup.display()
+                );
                 self.balloon(t(self.lang, Key::ConfigCorrupt));
                 return;
             }
@@ -655,7 +657,10 @@ fn load_startup() -> (Config, bool, Option<String>) {
             (cfg, true, None)
         }
         LoadOutcome::Corrupt { backup } => {
-            log!("config: corrupt, backup {}; using defaults", backup.display());
+            log!(
+                "config: corrupt, backup {}; using defaults",
+                backup.display()
+            );
             let cfg = Config::default();
             let body = t(i18n::resolve(cfg.language), Key::ConfigCorrupt).to_string();
             (cfg, true, Some(body))
@@ -741,21 +746,42 @@ mod tests {
     #[test]
     fn diff_border_thickness_only_indicators() {
         let a = Config::default();
-        let b = Config { border_thickness: 9, ..a.clone() };
-        assert_eq!(diff(&a, &b), Changes { indicators: true, ..Default::default() });
+        let b = Config {
+            border_thickness: 9,
+            ..a.clone()
+        };
+        assert_eq!(
+            diff(&a, &b),
+            Changes {
+                indicators: true,
+                ..Default::default()
+            }
+        );
     }
 
     #[test]
     fn diff_mic_only_mic() {
         let a = Config::default();
-        let b = Config { mic_id: Some("m".into()), ..a.clone() };
-        assert_eq!(diff(&a, &b), Changes { mic: true, ..Default::default() });
+        let b = Config {
+            mic_id: Some("m".into()),
+            ..a.clone()
+        };
+        assert_eq!(
+            diff(&a, &b),
+            Changes {
+                mic: true,
+                ..Default::default()
+            }
+        );
     }
 
     #[test]
     fn diff_guard_enabled_flags_guard() {
         let a = Config::default();
-        let b = Config { guard_enabled: !a.guard_enabled, ..a.clone() };
+        let b = Config {
+            guard_enabled: !a.guard_enabled,
+            ..a.clone()
+        };
         assert!(diff(&a, &b).guard);
     }
 
