@@ -428,6 +428,12 @@ impl Indicators {
         }
     }
 
+    /// Hides everything without showing a state (mic absent).
+    pub fn hide_all(&mut self) {
+        self.set_strips(false);
+        self.hide_popup();
+    }
+
     pub fn hide_popup(&mut self) {
         for p in &self.popups {
             p.hide();

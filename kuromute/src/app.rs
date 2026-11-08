@@ -25,14 +25,16 @@ use windows::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DefWindowProcW, DispatchMessageW, FindWindowW, GetMessageW, KillTimer, MSG,
     PBT_APMRESUMEAUTOMATIC, PostMessageW, PostQuitMessage, RegisterClassExW,
     RegisterWindowMessageW, SPI_SETWORKAREA, SW_SHOWNORMAL, SetTimer, TranslateMessage,
-    WINDOW_EX_STYLE, WM_CONTEXTMENU, WM_DISPLAYCHANGE, WM_DPICHANGED, WM_HOTKEY, WM_LBUTTONUP,
-    WM_POWERBROADCAST, WM_SETTINGCHANGE, WM_TIMER, WNDCLASSEXW, WS_OVERLAPPED,
+    WINDOW_EX_STYLE, WM_CLOSE, WM_CONTEXTMENU, WM_DISPLAYCHANGE, WM_DPICHANGED, WM_ENDSESSION,
+    WM_HOTKEY, WM_LBUTTONUP, WM_POWERBROADCAST, WM_SETTINGCHANGE, WM_TIMER, WNDCLASSEXW,
+    WS_OVERLAPPED,
 };
 use windows::core::{HSTRING, PCWSTR, w};
 
 const HOTKEY_ID: i32 = 1;
 const TIMER_DEVICES: usize = 2;
 const TIMER_DISPLAY: usize = 3;
+const TIMER_GUARD_RESUME: usize = 4;
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
@@ -80,11 +82,12 @@ pub fn diff(o: &Config, n: &Config) -> Changes {
     }
 }
 
-/// Indicator state to show after a re-watch, or None if what's visible doesn't change.
-/// "Not present" counts as unmuted, so a replug that comes back unmuted shows nothing.
+/// Indicator state to show after a re-watch, or None if nothing should be shown.
+/// A missing mic (new = None) never shows anything (the caller hides); a replug
+/// that comes back unmuted also shows nothing.
 fn indicator_change(old: Option<bool>, new: Option<bool>) -> Option<bool> {
-    let (o, n) = (old == Some(true), new == Some(true));
-    (o != n).then_some(n)
+    let n = new?;
+    ((old == Some(true)) != n).then_some(n)
 }
 
 /// Only work-area changes move overlays; other WM_SETTINGCHANGE broadcasts are noise.
@@ -245,6 +248,7 @@ struct State {
     pending_toggle_at: Option<Instant>,
     pending_balloon: Option<Pending>,
     hotkey_err: Option<String>,
+    devices_armed: bool,
     settings_child: Option<Child>,
 }
 
@@ -273,6 +277,14 @@ impl State {
         }
     }
 
+    /// Debounce: arm only if not already pending, so a steady event stream can't starve it.
+    fn arm_devices(&mut self) {
+        if !self.devices_armed {
+            self.devices_armed = true;
+            self.arm(TIMER_DEVICES, 300);
+        }
+    }
+
     fn save(&self) {
         if !self.can_save {
             log!("config: not saved (file was unreadable at startup)");
@@ -283,15 +295,18 @@ impl State {
 
     fn register_hotkey(&mut self) {
         let h = self.cfg.hotkey;
-        let res = match hotkey::validate(&h) {
-            Ok(()) => hotkey::register(self.hwnd, HOTKEY_ID, &h).map_err(|e| e.to_string()),
-            Err(e) => Err(format!("{e:?}")),
+        let (res, key) = match hotkey::validate(&h) {
+            Ok(()) => (
+                hotkey::register(self.hwnd, HOTKEY_ID, &h).map_err(|e| e.to_string()),
+                Key::HotkeyFailed,
+            ),
+            Err(e) => (Err(format!("{e:?}")), Key::HotkeyInvalid),
         };
         self.hotkey_err = match res {
             Ok(()) => None,
             Err(e) => {
                 log!("hotkey {} failed: {e}", hotkey::display(&h));
-                let msg = t(self.lang, Key::HotkeyFailed).replace("{key}", &hotkey::display(&h));
+                let msg = t(self.lang, key).replace("{key}", &hotkey::display(&h));
                 self.balloon(&msg);
                 Some(msg)
             }
@@ -302,7 +317,9 @@ impl State {
     fn rewatch(&mut self) {
         let new = self.audio.watch_mute(self.cfg.mic_id.as_deref());
         let old = std::mem::replace(&mut self.last_muted, new);
-        if let Some(muted) = indicator_change(old, new) {
+        if new.is_none() {
+            self.ind.hide_all();
+        } else if let Some(muted) = indicator_change(old, new) {
             self.ind.show(self.hwnd, muted);
         }
         self.update_tray();
@@ -353,6 +370,7 @@ impl State {
             Action::GiveUp => {
                 log!("guard: giving up for 5 minutes");
                 self.balloon(t(self.lang, Key::GuardPaused));
+                self.arm(TIMER_GUARD_RESUME, 300_000);
             }
         }
     }
@@ -460,13 +478,15 @@ impl State {
             }
             MenuCmd::CheckUpdate => spawn_update_check(self.hwnd, true),
             MenuCmd::ReportBug => open_url(&report_bug_url(&os_build())),
-            MenuCmd::Exit => {
-                hotkey::unregister(self.hwnd, HOTKEY_ID);
-                self.ind.destroy();
-                self.tray.remove();
-                unsafe { PostQuitMessage(0) };
-            }
+            MenuCmd::Exit => self.exit(),
         }
+    }
+
+    fn exit(&mut self) {
+        hotkey::unregister(self.hwnd, HOTKEY_ID);
+        self.ind.destroy();
+        self.tray.remove();
+        unsafe { PostQuitMessage(0) };
     }
 
     fn on_update(&mut self, manual: bool) {
@@ -492,6 +512,7 @@ impl State {
                     backup.display()
                 );
                 self.balloon(t(self.lang, Key::ConfigCorrupt));
+                self.save(); // the bad file was renamed away; recreate config.json
                 return;
             }
             LoadOutcome::Missing => {
@@ -508,7 +529,7 @@ impl State {
         self.cfg = new;
         self.can_save = true;
         self.lang = i18n::resolve(self.cfg.language);
-        if ch.hotkey {
+        if ch.hotkey || self.hotkey_err.is_some() {
             hotkey::unregister(self.hwnd, HOTKEY_ID);
             self.register_hotkey();
         }
@@ -533,12 +554,14 @@ impl State {
         match m {
             WM_HOTKEY => self.on_toggle(),
             WM_APP_MUTE => self.on_mute(wp.0 != 0),
-            WM_APP_DEVICES => self.arm(TIMER_DEVICES, 300),
+            WM_APP_DEVICES => self.arm_devices(),
+            WM_CLOSE => self.exit(),
+            WM_ENDSESSION if wp.0 != 0 => self.exit(),
             WM_DISPLAYCHANGE | WM_DPICHANGED => self.arm(TIMER_DISPLAY, 500),
             WM_SETTINGCHANGE if settingchange_affects_layout(wp.0) => self.arm(TIMER_DISPLAY, 500),
             WM_POWERBROADCAST if wp.0 == PBT_APMRESUMEAUTOMATIC as usize => {
                 self.arm(TIMER_DISPLAY, 500);
-                self.arm(TIMER_DEVICES, 300);
+                self.arm_devices();
             }
             WM_TIMER => {
                 unsafe {
@@ -547,9 +570,11 @@ impl State {
                 match wp.0 {
                     TIMER_POPUP_HIDE => self.ind.hide_popup(),
                     TIMER_DEVICES => {
+                        self.devices_armed = false;
                         self.rewatch();
                         self.guard_check();
                     }
+                    TIMER_GUARD_RESUME => self.guard_check(),
                     TIMER_DISPLAY => self.rebuild_indicators(),
                     _ => {}
                 }
@@ -595,6 +620,8 @@ fn is_ours(m: u32) -> bool {
     matches!(
         m,
         WM_HOTKEY
+            | WM_CLOSE
+            | WM_ENDSESSION
             | WM_TIMER
             | WM_DISPLAYCHANGE
             | WM_SETTINGCHANGE
@@ -609,6 +636,7 @@ fn is_ours(m: u32) -> bool {
 
 unsafe extern "system" fn wndproc(h: HWND, m: u32, wp: WPARAM, lp: LPARAM) -> LRESULT {
     if is_ours(m) && with_state(Some((m, wp, lp)), |s| s.handle(m, wp, lp)) {
+        // WM_CLOSE / WM_ENDSESSION return 0 (handled) so DefWindowProc doesn't destroy first.
         return LRESULT((m == WM_POWERBROADCAST) as isize);
     }
     unsafe { DefWindowProcW(h, m, wp, lp) }
@@ -728,6 +756,7 @@ pub fn run() -> i32 {
         pending_toggle_at: None,
         pending_balloon: None,
         hotkey_err: None,
+        devices_armed: false,
         settings_child: None,
     };
     STATE.with(|c| *c.borrow_mut() = Some(state));
@@ -803,7 +832,9 @@ mod tests {
     #[test]
     fn indicator_change_cases() {
         assert_eq!(indicator_change(None, Some(true)), Some(true));
-        assert_eq!(indicator_change(Some(true), None), Some(false));
+        assert_eq!(indicator_change(Some(true), None), None);
+        assert_eq!(indicator_change(None, None), None);
+        assert_eq!(indicator_change(Some(false), None), None);
         assert_eq!(indicator_change(Some(true), Some(false)), Some(false));
         assert_eq!(indicator_change(Some(false), Some(true)), Some(true));
         assert_eq!(indicator_change(None, Some(false)), None);

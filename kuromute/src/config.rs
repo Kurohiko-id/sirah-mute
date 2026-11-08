@@ -145,7 +145,8 @@ pub fn load(path: &Path) -> LoadOutcome {
         Err(e) if e.kind() == io::ErrorKind::NotFound => return LoadOutcome::Missing,
         Err(e) => return LoadOutcome::Unreadable(e.to_string()),
     };
-    match serde_json::from_slice::<Config>(&bytes) {
+    let bytes = bytes.strip_prefix(b"\xEF\xBB\xBF").unwrap_or(&bytes);
+    match serde_json::from_slice::<Config>(bytes) {
         Ok(c) => LoadOutcome::Loaded(c.sanitized()),
         Err(e) if e.is_io() => LoadOutcome::Unreadable(e.to_string()),
         Err(_) => backup_corrupt(path),
@@ -293,6 +294,17 @@ mod tests {
         fs::write(&p, r#"{"popup_scale": 5.0}"#).unwrap();
         match load(&p) {
             LoadOutcome::Loaded(c) => assert_eq!(c.popup_scale, 2.0),
+            o => panic!("{o:?}"),
+        }
+        fs::remove_dir_all(&d).unwrap();
+    }
+    #[test]
+    fn load_strips_utf8_bom() {
+        let d = tmp("bom");
+        let p = d.join("config.json");
+        fs::write(&p, b"\xEF\xBB\xBF{\"popup_scale\": 1.5}").unwrap();
+        match load(&p) {
+            LoadOutcome::Loaded(c) => assert_eq!(c.popup_scale, 1.5),
             o => panic!("{o:?}"),
         }
         fs::remove_dir_all(&d).unwrap();

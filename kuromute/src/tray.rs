@@ -136,7 +136,7 @@ impl Tray {
 
     pub fn balloon(&self, title: &str, body: &str) {
         let mut nid = self.base();
-        nid.uFlags = NIF_INFO;
+        nid.uFlags = NIF_INFO | NIF_SHOWTIP;
         nid.dwInfoFlags = NIIF_INFO | NIIF_RESPECT_QUIET_TIME;
         copy_trunc(&mut nid.szInfoTitle, title);
         copy_trunc(&mut nid.szInfo, body);

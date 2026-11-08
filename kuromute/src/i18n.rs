@@ -39,13 +39,14 @@ pub enum Key {
     UpdateAvailable,
     UpToDate,
     HotkeyFailed,
+    HotkeyInvalid,
     ConfigCorrupt,
     AppName,
 }
 
 impl Key {
     #[cfg(test)]
-    pub const ALL: [Key; 16] = [
+    pub const ALL: [Key; 17] = [
         Key::Muted,
         Key::Unmuted,
         Key::MicDisconnected,
@@ -60,6 +61,7 @@ impl Key {
         Key::UpdateAvailable,
         Key::UpToDate,
         Key::HotkeyFailed,
+        Key::HotkeyInvalid,
         Key::ConfigCorrupt,
         Key::AppName,
     ];
@@ -102,6 +104,8 @@ pub fn t(l: ResolvedLang, k: Key) -> &'static str {
         (UpToDate, Id) => "Sudah versi terbaru.",
         (HotkeyFailed, En) => "Shortcut {key} is in use by another app. Pick another in Settings.",
         (HotkeyFailed, Id) => "Tombol {key} sudah dipakai app lain. Ganti di Pengaturan.",
+        (HotkeyInvalid, En) => "Shortcut {key} can't be used. Pick another in Settings.",
+        (HotkeyInvalid, Id) => "Tombol {key} tidak bisa dipakai. Ganti di Pengaturan.",
         (ConfigCorrupt, En) => {
             "Settings file was damaged and has been reset. Backup: config.json.bad"
         }

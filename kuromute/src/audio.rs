@@ -63,7 +63,7 @@ impl IMMNotificationClient_Impl for DeviceNotify_Impl {
         Ok(())
     }
     fn OnPropertyValueChanged(&self, _: &PCWSTR, _: &PROPERTYKEY) -> Result<()> {
-        post(self.hwnd, WM_APP_DEVICES, 0);
+        // Fires constantly; posting here would keep the device debounce busy.
         Ok(())
     }
 }
