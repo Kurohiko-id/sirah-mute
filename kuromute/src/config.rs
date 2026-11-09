@@ -88,6 +88,8 @@ pub struct Config {
     pub autostart: bool,
     #[serde(deserialize_with = "or_default")]
     pub language: Lang,
+    pub talk_warn_enabled: bool,
+    pub talk_warn_mic_id: Option<String>,
 }
 
 impl Default for Config {
@@ -113,6 +115,8 @@ impl Default for Config {
             guard_enabled: true,
             autostart: true,
             language: Lang::default(),
+            talk_warn_enabled: false,
+            talk_warn_mic_id: None,
         }
     }
 }
@@ -246,6 +250,12 @@ mod tests {
         assert_eq!(c.border_style, BorderStyle::Glow);
         let c: Config = serde_json::from_str(r#"{"border_style":"Neon"}"#).unwrap();
         assert_eq!(c.border_style, BorderStyle::Glow);
+    }
+    #[test]
+    fn old_config_has_talk_warn_off() {
+        let c: Config = serde_json::from_str("{}").unwrap();
+        assert!(!c.talk_warn_enabled);
+        assert_eq!(c.talk_warn_mic_id, None);
     }
     #[test]
     fn save_then_load_roundtrip_and_no_tmp_left() {

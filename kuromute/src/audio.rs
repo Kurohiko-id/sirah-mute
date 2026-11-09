@@ -5,6 +5,7 @@ use windows::Win32::Devices::FunctionDiscovery::PKEY_Device_FriendlyName;
 use windows::Win32::Foundation::{HWND, LPARAM, PROPERTYKEY, WPARAM};
 use windows::Win32::Media::Audio::Endpoints::{
     IAudioEndpointVolume, IAudioEndpointVolumeCallback, IAudioEndpointVolumeCallback_Impl,
+    IAudioMeterInformation,
 };
 use windows::Win32::Media::Audio::{
     AUDIO_VOLUME_NOTIFICATION_DATA, DEVICE_STATE, DEVICE_STATE_ACTIVE, DEVICE_STATE_DISABLED,
@@ -189,6 +190,17 @@ impl Audio {
             let muted = vol.GetMute().ok().map(|b| b.as_bool());
             self.volume = Some((vol, cb));
             muted
+        }
+    }
+
+    /// Peak meter of capture device `id`; None if it is absent or inactive.
+    pub fn meter(&self, id: &str) -> Option<IAudioMeterInformation> {
+        let dev = self.device(id).ok()?;
+        unsafe {
+            if dev.GetState().ok()? != DEVICE_STATE_ACTIVE {
+                return None;
+            }
+            dev.Activate(CLSCTX_ALL, None).ok()
         }
     }
 

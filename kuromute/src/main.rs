@@ -15,6 +15,7 @@ mod overlay;
 mod policy_config;
 mod settings;
 mod sound;
+mod talk;
 mod tray;
 mod update;
 

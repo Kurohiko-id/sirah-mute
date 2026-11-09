@@ -651,6 +651,26 @@ impl Indicators {
         }
     }
 
+    /// Re-shows the muted popup with the live clock (talk-while-muted warning).
+    /// Hides again on the usual timer unless it persists while muted.
+    pub fn flash_popup(&mut self, owner: HWND) {
+        if self.popups.is_empty() || self.muted_since.is_none() {
+            return;
+        }
+        self.draw_clock();
+        for p in &self.popups {
+            p.show(2);
+        }
+        self.popup_visible = true;
+        if self.persist {
+            self.arm_clock(owner);
+        } else if !owner.is_invalid() {
+            unsafe {
+                SetTimer(Some(owner), TIMER_POPUP_HIDE, POPUP_HIDE_MS, None);
+            }
+        }
+    }
+
     /// Renders the current mute duration into every popup's clock slot (2).
     fn draw_clock(&mut self) {
         let (Some(r), Some(t0)) = (&self.renderer, self.muted_since) else {

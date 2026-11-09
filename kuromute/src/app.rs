@@ -5,6 +5,7 @@ use crate::enforcer::{Action, Enforcer};
 use crate::i18n::{self, Key, ResolvedLang, t};
 use crate::msg::*;
 use crate::overlay::{Indicators, TIMER_MUTE_CLOCK, TIMER_POPUP_HIDE, TIMER_PULSE};
+use crate::talk::TalkDetector;
 use crate::tray::{MenuCmd, Tray, TrayState};
 use crate::update::{self, Release};
 use crate::{audio, autostart, hotkey, log, migrate, monitors, sound};
@@ -17,6 +18,7 @@ use windows::Win32::Foundation::{
     CloseHandle, ERROR_ALREADY_EXISTS, ERROR_SUCCESS, GetLastError, HANDLE, HINSTANCE, HWND,
     LPARAM, LRESULT, WAIT_OBJECT_0, WPARAM,
 };
+use windows::Win32::Media::Audio::Endpoints::IAudioMeterInformation;
 use windows::Win32::System::Com::{COINIT_APARTMENTTHREADED, CoInitializeEx};
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::System::Registry::{HKEY_LOCAL_MACHINE, RRF_RT_REG_SZ, RegGetValueW};
@@ -39,6 +41,8 @@ const TIMER_DEVICES: usize = 2;
 const TIMER_DISPLAY: usize = 3;
 const TIMER_GUARD_RESUME: usize = 4;
 const TIMER_SETTINGS_WATCH: usize = 5;
+pub(crate) const TIMER_TALK: usize = 8;
+const TALK_POLL_MS: u32 = 100;
 pub(crate) const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
@@ -63,6 +67,7 @@ pub struct Changes {
     pub mic: bool,
     pub guard: bool,
     pub autostart: bool,
+    pub talk: bool,
 }
 
 pub fn diff(o: &Config, n: &Config) -> Changes {
@@ -84,6 +89,8 @@ pub fn diff(o: &Config, n: &Config) -> Changes {
             || o.guard_mode != n.guard_mode
             || o.guard_enabled != n.guard_enabled,
         autostart: o.autostart != n.autostart,
+        talk: o.talk_warn_enabled != n.talk_warn_enabled
+            || o.talk_warn_mic_id != n.talk_warn_mic_id,
     }
 }
 
@@ -271,6 +278,8 @@ struct State {
     hotkey_paused: bool,
     /// Reply to MSG_RELOAD: 0 ok, 1 hotkey registration failed.
     last_reload_code: isize,
+    talk_meter: Option<IAudioMeterInformation>,
+    talk: TalkDetector,
 }
 
 impl State {
@@ -338,6 +347,46 @@ impl State {
     }
 
     /// Re-targets the mute watch (replug / mic change) and syncs indicators + tray.
+    /// Watches the talk-warn mic's meter only while the mic is muted and the
+    /// feature is configured. Activation is a COM call: never before `log_latency`.
+    fn update_talk_watch(&mut self) {
+        let id = self.cfg.talk_warn_mic_id.as_deref();
+        let on = self.last_muted == Some(true) && self.cfg.talk_warn_enabled;
+        self.talk_meter = id.filter(|_| on).and_then(|id| self.audio.meter(id));
+        self.talk.reset();
+        unsafe {
+            if self.talk_meter.is_some() {
+                SetTimer(Some(self.hwnd), TIMER_TALK, TALK_POLL_MS, None);
+            } else {
+                let _ = KillTimer(Some(self.hwnd), TIMER_TALK);
+            }
+        }
+    }
+
+    /// TIMER_TALK handler (the app kills the timer first, so this re-arms itself).
+    fn tick_talk(&mut self) {
+        let Some(m) = &self.talk_meter else { return };
+        if self.last_muted != Some(true) {
+            self.talk_meter = None;
+            return;
+        }
+        // An error means the device is gone: drop the meter silently; the
+        // device-change path re-activates it on replug.
+        let Ok(peak) = (unsafe { m.GetPeakValue() }) else {
+            self.talk_meter = None;
+            return;
+        };
+        if self.talk.feed(peak, Instant::now()) {
+            self.ind.pulse(self.hwnd);
+            self.ind.flash_popup(self.hwnd);
+            if self.cfg.sound_enabled {
+                sound::play(true);
+            }
+            log!("talk: warned");
+        }
+        self.arm(TIMER_TALK, TALK_POLL_MS);
+    }
+
     fn rewatch(&mut self) {
         let new = self.audio.watch_mute(self.cfg.mic_id.as_deref());
         let old = std::mem::replace(&mut self.last_muted, new);
@@ -346,6 +395,7 @@ impl State {
         } else if let Some(muted) = indicator_change(old, new) {
             self.ind.show(self.hwnd, muted, true);
         }
+        self.update_talk_watch();
         self.update_tray();
     }
 
@@ -469,6 +519,7 @@ impl State {
         if self.cfg.sound_enabled {
             sound::play(muted);
         }
+        self.update_talk_watch();
     }
 
     fn on_tray(&mut self, lp: LPARAM) {
@@ -597,6 +648,9 @@ impl State {
         if ch.autostart {
             self.apply_autostart();
         }
+        if ch.talk {
+            self.update_talk_watch();
+        }
         self.update_tray();
     }
 
@@ -625,11 +679,12 @@ impl State {
                         }
                         self.ind.hide_popup();
                     }
+                    TIMER_TALK => self.tick_talk(),
                     TIMER_PULSE => self.ind.tick_pulse(self.hwnd),
                     TIMER_MUTE_CLOCK => self.ind.tick_clock(self.hwnd),
                     TIMER_DEVICES => {
                         self.devices_armed = false;
-                        self.rewatch();
+                        self.rewatch(); // also refreshes the talk watch
                         self.guard_check();
                     }
                     TIMER_GUARD_RESUME => self.guard_check(),
@@ -844,6 +899,8 @@ pub fn run() -> i32 {
         settings_proc: None,
         hotkey_paused: false,
         last_reload_code: 0,
+        talk_meter: None,
+        talk: TalkDetector::new(),
     };
     STATE.with(|c| *c.borrow_mut() = Some(state));
     with_state(None, |s| s.startup(note));
@@ -897,6 +954,22 @@ mod tests {
             diff(&a, &b),
             Changes {
                 indicators: true,
+                ..Default::default()
+            }
+        );
+    }
+
+    #[test]
+    fn talk_settings_flag_talk_only() {
+        let a = Config::default();
+        let b = Config {
+            talk_warn_mic_id: Some("{x}".into()),
+            ..a.clone()
+        };
+        assert_eq!(
+            diff(&a, &b),
+            Changes {
+                talk: true,
                 ..Default::default()
             }
         );
