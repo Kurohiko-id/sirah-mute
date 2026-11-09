@@ -4,7 +4,7 @@ use crate::config::{self, Config, LoadOutcome, config_path, data_dir};
 use crate::enforcer::{Action, Enforcer};
 use crate::i18n::{self, Key, ResolvedLang, t};
 use crate::msg::*;
-use crate::overlay::{Indicators, TIMER_POPUP_HIDE};
+use crate::overlay::{Indicators, TIMER_POPUP_HIDE, TIMER_PULSE};
 use crate::tray::{MenuCmd, Tray, TrayState};
 use crate::update::{self, Release};
 use crate::{audio, autostart, hotkey, log, migrate, monitors, sound};
@@ -344,7 +344,7 @@ impl State {
         if new.is_none() {
             self.ind.hide_all();
         } else if let Some(muted) = indicator_change(old, new) {
-            self.ind.show(self.hwnd, muted);
+            self.ind.show(self.hwnd, muted, true);
         }
         self.update_tray();
     }
@@ -354,7 +354,7 @@ impl State {
         let sel = monitors::select(&all, self.cfg.all_monitors, &self.cfg.monitor_ids);
         self.ind.rebuild(&self.cfg, &sel, self.lang);
         if self.last_muted == Some(true) {
-            self.ind.show(self.hwnd, true);
+            self.ind.show(self.hwnd, true, false);
         }
     }
 
@@ -460,7 +460,7 @@ impl State {
             return;
         }
         self.last_muted = Some(muted);
-        self.ind.show(self.hwnd, muted);
+        self.ind.show(self.hwnd, muted, true);
         self.log_latency();
         if muted {
             self.ind.raise(); // off the measured path; lands above late topmost windows
@@ -620,6 +620,7 @@ impl State {
                 }
                 match wp.0 {
                     TIMER_POPUP_HIDE => self.ind.hide_popup(),
+                    TIMER_PULSE => self.ind.tick_pulse(self.hwnd),
                     TIMER_DEVICES => {
                         self.devices_armed = false;
                         self.rewatch();

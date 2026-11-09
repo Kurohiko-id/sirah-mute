@@ -6,6 +6,7 @@ use crate::geometry::{Rect, border_strips, popup_rect};
 use crate::i18n::{Key, ResolvedLang, t};
 use crate::monitors::Monitor;
 use std::sync::Once;
+use std::time::Instant;
 use windows::Win32::Foundation::{
     COLORREF, HINSTANCE, HWND, LPARAM, LRESULT, POINT, RECT, SIZE, WPARAM,
 };
@@ -43,6 +44,10 @@ use windows::Win32::UI::WindowsAndMessaging::{
 use windows::core::{BOOL, PCWSTR, Result, w};
 
 pub const TIMER_POPUP_HIDE: usize = 1;
+pub const TIMER_PULSE: usize = 6;
+const PULSE_TICK_MS: u32 = 33;
+const BLINK_MS: u32 = 550;
+const BLINKS: u32 = 3;
 const POPUP_HIDE_MS: u32 = 1500;
 const POPUP_CLASS: PCWSTR = w!("KuroMutePopup");
 const BORDER_CLASS: PCWSTR = w!("KuroMuteBorder");
@@ -445,6 +450,16 @@ fn paint_glow(h: HWND, r: Rect, mon: Rect, t: u32) -> Result<()> {
     }
 }
 
+/// Strip alpha `elapsed_ms` into the opening pulse: 3 cosine blinks 255 -> 64 -> 255.
+/// `None` once the pulse is over.
+pub fn pulse_alpha(elapsed_ms: u32) -> Option<u8> {
+    if elapsed_ms >= BLINK_MS * BLINKS {
+        return None;
+    }
+    let ph = std::f32::consts::TAU * elapsed_ms as f32 / BLINK_MS as f32;
+    Some((255.0 - 191.0 * (1.0 - ph.cos()) / 2.0).round() as u8)
+}
+
 fn has_family(dw: &IDWriteFactory, name: PCWSTR) -> bool {
     let mut coll = None;
     unsafe {
@@ -457,7 +472,6 @@ fn has_family(dw: &IDWriteFactory, name: PCWSTR) -> bool {
     }
 }
 
-#[derive(Default)]
 pub struct Indicators {
     popups: Vec<Popup>,
     strips: Vec<HWND>,
@@ -467,6 +481,10 @@ pub struct Indicators {
     /// DWM cloak failed: strips are shown/hidden the old (slower) SWP way.
     fallback: bool,
     strips_visible: bool,
+    /// Start of the running opening pulse; `None` when idle.
+    pub pulse_start: Option<Instant>,
+    /// Current global alpha of the strips (255 when idle).
+    pub alpha: u8,
 }
 
 impl Indicators {
@@ -478,6 +496,8 @@ impl Indicators {
             glow: false,
             fallback: false,
             strips_visible: false,
+            pulse_start: None,
+            alpha: 255,
         }
     }
 
@@ -541,8 +561,12 @@ impl Indicators {
         }
     }
 
-    pub fn show(&mut self, owner: HWND, muted: bool) {
+    /// `fresh`: a new mute/unmute event (starts the Glow pulse), not a redraw.
+    pub fn show(&mut self, owner: HWND, muted: bool, fresh: bool) {
         self.set_strips(muted);
+        if muted && fresh && self.glow {
+            self.pulse(owner);
+        }
         if self.popups.is_empty() {
             return;
         }
@@ -577,9 +601,72 @@ impl Indicators {
         }
     }
 
+    /// Starts (or restarts) the opening pulse. Hot-path safe: an Instant and a
+    /// timer only; alpha changes happen in `tick_pulse`. No-op unless strips are shown.
+    pub fn pulse(&mut self, owner: HWND) {
+        if !self.strips_visible {
+            return;
+        }
+        self.pulse_start = Some(Instant::now());
+        arm_pulse(owner);
+    }
+
+    /// TIMER_PULSE handler. The app kills timers on WM_TIMER, so this re-arms.
+    pub fn tick_pulse(&mut self, owner: HWND) {
+        let Some(t0) = self.pulse_start else { return };
+        let ms = u32::try_from(t0.elapsed().as_millis()).unwrap_or(u32::MAX);
+        match pulse_alpha(ms) {
+            Some(a) => {
+                self.set_alpha(a);
+                arm_pulse(owner);
+            }
+            None => self.stop_pulse(),
+        }
+    }
+
+    /// Ends the pulse at full alpha. A pending tick (at most one) finds no
+    /// `pulse_start` and does not re-arm, so no KillTimer (and no owner) is needed.
+    fn stop_pulse(&mut self) {
+        self.pulse_start = None;
+        if self.alpha != 255 {
+            self.set_alpha(255);
+        }
+    }
+
+    fn set_alpha(&mut self, a: u8) {
+        self.alpha = a;
+        let blend = BLENDFUNCTION {
+            BlendOp: AC_SRC_OVER as u8,
+            BlendFlags: 0,
+            SourceConstantAlpha: a,
+            AlphaFormat: AC_SRC_ALPHA as u8,
+        };
+        for &h in &self.strips {
+            unsafe {
+                let _ = if self.glow {
+                    UpdateLayeredWindow(
+                        h,
+                        None,
+                        None,
+                        None,
+                        None,
+                        None,
+                        COLORREF(0),
+                        Some(&blend),
+                        ULW_ALPHA,
+                    )
+                } else {
+                    SetLayeredWindowAttributes(h, COLORREF(0), a, LWA_ALPHA)
+                };
+            }
+        }
+    }
+
     pub fn destroy(&mut self) {
         self.strips_visible = false;
         self.glow = false;
+        self.pulse_start = None;
+        self.alpha = 255;
         self.popups.clear();
         for h in self.strips.drain(..) {
             unsafe {
@@ -605,6 +692,9 @@ impl Indicators {
             });
         } else if !visible {
             self.raise_strips(SWP_NOREDRAW);
+        }
+        if !visible {
+            self.stop_pulse(); // after the hide, so a mid-pulse unmute isn't slowed
         }
     }
 
@@ -650,6 +740,15 @@ impl Indicators {
     }
 }
 
+/// SetTimer for the next pulse tick; skipped for a null owner (unit tests).
+fn arm_pulse(owner: HWND) {
+    if !owner.is_invalid() {
+        unsafe {
+            SetTimer(Some(owner), TIMER_PULSE, PULSE_TICK_MS, None);
+        }
+    }
+}
+
 impl Drop for Indicators {
     fn drop(&mut self) {
         self.destroy();
@@ -671,5 +770,26 @@ mod tests {
         for d in 6..30 {
             assert!(glow_alpha(d + 1, 6) <= glow_alpha(d, 6));
         }
+    }
+
+    #[test]
+    fn pulse_curve() {
+        assert_eq!(pulse_alpha(0), Some(255));
+        assert!(pulse_alpha(275).unwrap() < 90); // trough of blink 1
+        assert_eq!(pulse_alpha(550), Some(255));
+        assert!(pulse_alpha(1375).unwrap() < 90); // trough of blink 3
+        assert_eq!(pulse_alpha(1650), None);
+    }
+
+    #[test]
+    fn stop_pulse_resets_alpha() {
+        let mut ind = Indicators::new();
+        ind.pulse(HWND::default()); // no strips: nothing to pulse
+        assert_eq!(ind.pulse_start, None);
+        ind.pulse_start = Some(Instant::now());
+        ind.alpha = 100;
+        ind.hide_all();
+        assert_eq!(ind.pulse_start, None);
+        assert_eq!(ind.alpha, 255);
     }
 }
