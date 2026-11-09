@@ -56,6 +56,8 @@ Hasil tes langsung di PC user (2026-11-09):
 
 ## Bagian 2b: Border glow + pulse ⏳ (sebelum merge `v2-settings`)
 
+Rencana kerja 2b–2e: [plans/2026-11-10-v2-indicators-extras.md](plans/2026-11-10-v2-indicators-extras.md) (7 task)
+
 - [x] Sample gaya disetujui user (2026-11-10): https://claude.ai/code/artifact/c176bc3d-1397-44c1-8ed1-a7b97ac54045 (pilih "Glow + pulse awal")
 - [x] Keputusan: jadi pilihan Gaya di tab Penanda (Solid / Glow), default Glow
 - [ ] Glow: strip dilebarin ke dalam, bitmap gradasi alpha per-pixel via `UpdateLayeredWindow` (renderer popup), dirender sekali per `rebuild`
