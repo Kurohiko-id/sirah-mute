@@ -45,6 +45,7 @@ use windows::core::{BOOL, PCWSTR, Result, w};
 
 pub const TIMER_POPUP_HIDE: usize = 1;
 pub const TIMER_PULSE: usize = 6;
+pub const TIMER_MUTE_CLOCK: usize = 7;
 const PULSE_TICK_MS: u32 = 33;
 const BLINK_MS: u32 = 550;
 const BLINKS: u32 = 3;
@@ -129,13 +130,84 @@ struct Popup {
     hwnd: HWND,
     dc: HDC,
     old: HGDIOBJ,
-    /// [unmuted, muted], both selected into `dc` on demand.
-    bmp: [HBITMAP; 2],
+    /// [unmuted, muted "· 0:00", muted live clock], selected into `dc` on demand.
+    bmp: [HBITMAP; 3],
     rect: Rect,
+    bmi: BITMAPINFO,
+    icon_fmt: IDWriteTextFormat,
+    text_fmt: IDWriteTextFormat,
+    icon_h: f32,
+    radius: f32,
 }
 
 impl Popup {
-    fn show(&self, muted: bool) {
+    /// Renders `glyph` + `text` into bitmap `slot` (created on first use, then reused).
+    fn draw(&mut self, r: &Renderer, slot: usize, glyph: &str, text: &str) -> Result<()> {
+        let (w, h) = (
+            self.rect.right - self.rect.left,
+            self.rect.bottom - self.rect.top,
+        );
+        let (wf, hf) = (w as f32, h as f32);
+        unsafe {
+            if self.bmp[slot].is_invalid() {
+                let mut bits = std::ptr::null_mut();
+                self.bmp[slot] =
+                    CreateDIBSection(Some(self.dc), &self.bmi, DIB_RGB_COLORS, &mut bits, None, 0)?;
+            }
+            let prev = SelectObject(self.dc, self.bmp[slot].into());
+            if self.old.is_invalid() {
+                self.old = prev;
+            }
+            r.rt.BindDC(
+                self.dc,
+                &RECT {
+                    left: 0,
+                    top: 0,
+                    right: w,
+                    bottom: h,
+                },
+            )?;
+            let fg = r.rt.CreateSolidColorBrush(&FG, None)?;
+            let bg = r.rt.CreateSolidColorBrush(&BG, None)?;
+            r.rt.BeginDraw();
+            r.rt.Clear(Some(&D2D1_COLOR_F::default()));
+            r.rt.FillRoundedRectangle(
+                &D2D1_ROUNDED_RECT {
+                    rect: D2D_RECT_F {
+                        left: 0.0,
+                        top: 0.0,
+                        right: wf,
+                        bottom: hf,
+                    },
+                    radiusX: self.radius,
+                    radiusY: self.radius,
+                },
+                &bg,
+            );
+            let draw = |s: &str, fmt: &IDWriteTextFormat, top: f32, bottom: f32| {
+                let u: Vec<u16> = s.encode_utf16().collect();
+                let lr = D2D_RECT_F {
+                    left: 0.0,
+                    top,
+                    right: wf,
+                    bottom,
+                };
+                r.rt.DrawText(
+                    &u,
+                    fmt,
+                    &lr,
+                    &fg,
+                    D2D1_DRAW_TEXT_OPTIONS_NONE,
+                    DWRITE_MEASURING_MODE_NATURAL,
+                );
+            };
+            draw(glyph, &self.icon_fmt, 0.0, self.icon_h);
+            draw(text, &self.text_fmt, self.icon_h, hf);
+            r.rt.EndDraw(None, None)
+        }
+    }
+
+    fn show(&self, slot: usize) {
         let size = SIZE {
             cx: self.rect.right - self.rect.left,
             cy: self.rect.bottom - self.rect.top,
@@ -151,7 +223,7 @@ impl Popup {
             AlphaFormat: AC_SRC_ALPHA as u8,
         };
         unsafe {
-            SelectObject(self.dc, self.bmp[muted as usize].into());
+            SelectObject(self.dc, self.bmp[slot].into());
             let _ = UpdateLayeredWindow(
                 self.hwnd,
                 None,
@@ -267,27 +339,16 @@ impl Renderer {
 
     fn popup(&self, mon: &Monitor, cfg: &Config, lang: ResolvedLang) -> Result<Popup> {
         let rect = popup_rect(mon.work, cfg.popup_position, cfg.popup_scale, mon.dpi);
-        let hwnd = create_window(POPUP_CLASS, rect)?;
-        let mut p = Popup {
-            hwnd,
-            dc: unsafe { CreateCompatibleDC(None) },
-            old: HGDIOBJ::default(),
-            bmp: [HBITMAP::default(); 2],
-            rect,
-        };
-        let (w, h) = (rect.right - rect.left, rect.bottom - rect.top);
         let s = cfg.popup_scale;
         let k = mon.dpi as f32 / 96.0;
         let pt = mon.dpi as f32 / 72.0; // physical px per point
         let icon_fmt = self.format(self.icon_family, 22.0 * s * pt)?;
         let text_fmt = self.format(w!("Segoe UI"), 9.5 * s * pt)?;
-        let icon_h = 60.0 * s * k;
-        let (wf, hf) = (w as f32, h as f32);
         let bmi = BITMAPINFO {
             bmiHeader: BITMAPINFOHEADER {
                 biSize: size_of::<BITMAPINFOHEADER>() as u32,
-                biWidth: w,
-                biHeight: -h, // top-down
+                biWidth: rect.right - rect.left,
+                biHeight: -(rect.bottom - rect.top), // top-down
                 biPlanes: 1,
                 biBitCount: 32,
                 biCompression: BI_RGB.0,
@@ -295,69 +356,21 @@ impl Renderer {
             },
             ..Default::default()
         };
-        for muted in [false, true] {
-            let (glyph, key) = if muted {
-                (GLYPH_MUTED, Key::Muted)
-            } else {
-                (GLYPH_UNMUTED, Key::Unmuted)
-            };
-            unsafe {
-                let mut bits = std::ptr::null_mut();
-                let bmp = CreateDIBSection(Some(p.dc), &bmi, DIB_RGB_COLORS, &mut bits, None, 0)?;
-                p.bmp[muted as usize] = bmp;
-                let prev = SelectObject(p.dc, bmp.into());
-                if p.old.is_invalid() {
-                    p.old = prev;
-                }
-                self.rt.BindDC(
-                    p.dc,
-                    &RECT {
-                        left: 0,
-                        top: 0,
-                        right: w,
-                        bottom: h,
-                    },
-                )?;
-                let fg = self.rt.CreateSolidColorBrush(&FG, None)?;
-                let bg = self.rt.CreateSolidColorBrush(&BG, None)?;
-                self.rt.BeginDraw();
-                self.rt.Clear(Some(&D2D1_COLOR_F::default()));
-                let r = 14.0 * s * k;
-                self.rt.FillRoundedRectangle(
-                    &D2D1_ROUNDED_RECT {
-                        rect: D2D_RECT_F {
-                            left: 0.0,
-                            top: 0.0,
-                            right: wf,
-                            bottom: hf,
-                        },
-                        radiusX: r,
-                        radiusY: r,
-                    },
-                    &bg,
-                );
-                let draw = |s: &str, fmt: &IDWriteTextFormat, top: f32, bottom: f32| {
-                    let u: Vec<u16> = s.encode_utf16().collect();
-                    let lr = D2D_RECT_F {
-                        left: 0.0,
-                        top,
-                        right: wf,
-                        bottom,
-                    };
-                    self.rt.DrawText(
-                        &u,
-                        fmt,
-                        &lr,
-                        &fg,
-                        D2D1_DRAW_TEXT_OPTIONS_NONE,
-                        DWRITE_MEASURING_MODE_NATURAL,
-                    );
-                };
-                draw(glyph, &icon_fmt, 0.0, icon_h);
-                draw(t(lang, key), &text_fmt, icon_h, hf);
-                self.rt.EndDraw(None, None)?;
-            }
-        }
+        let hwnd = create_window(POPUP_CLASS, rect)?;
+        let mut p = Popup {
+            hwnd,
+            dc: unsafe { CreateCompatibleDC(None) },
+            old: HGDIOBJ::default(),
+            bmp: [HBITMAP::default(); 3],
+            rect,
+            bmi,
+            icon_fmt,
+            text_fmt,
+            icon_h: 60.0 * s * k,
+            radius: 14.0 * s * k,
+        };
+        p.draw(self, 0, GLYPH_UNMUTED, t(lang, Key::Unmuted))?;
+        p.draw(self, 1, GLYPH_MUTED, &muted_text(lang, 0))?;
         Ok(p)
     }
 }
@@ -460,6 +473,26 @@ pub fn pulse_alpha(elapsed_ms: u32) -> Option<u8> {
     Some((255.0 - 191.0 * (1.0 - ph.cos()) / 2.0).round() as u8)
 }
 
+/// Mute duration as `m:ss`, or `h:mm:ss` from one hour on.
+pub fn fmt_elapsed(secs: u64) -> String {
+    let (h, m, s) = (secs / 3600, secs / 60 % 60, secs % 60);
+    if h > 0 {
+        format!("{h}:{m:02}:{s:02}")
+    } else {
+        format!("{m}:{s:02}")
+    }
+}
+
+fn muted_text(lang: ResolvedLang, secs: u64) -> String {
+    format!("{} · {}", t(lang, Key::Muted), fmt_elapsed(secs))
+}
+
+/// Delay to the next clock tick: the middle of the next displayed second, so
+/// timer jitter and re-arm drift never skip or repeat a number.
+fn clock_delay_ms(elapsed_ms: u128) -> u32 {
+    1500 - (elapsed_ms % 1000) as u32
+}
+
 fn has_family(dw: &IDWriteFactory, name: PCWSTR) -> bool {
     let mut coll = None;
     unsafe {
@@ -485,6 +518,13 @@ pub struct Indicators {
     pub pulse_start: Option<Instant>,
     /// Current global alpha of the strips (255 when idle).
     pub alpha: u8,
+    /// Kept after `rebuild` so the clock slot can be redrawn on ticks.
+    renderer: Option<Renderer>,
+    lang: ResolvedLang,
+    popup_visible: bool,
+    /// Start of the current mute. Survives `rebuild`/`destroy` (display change,
+    /// settings reload) so the clock keeps counting; cleared on unmute.
+    pub muted_since: Option<Instant>,
 }
 
 impl Indicators {
@@ -498,6 +538,10 @@ impl Indicators {
             strips_visible: false,
             pulse_start: None,
             alpha: 255,
+            renderer: None,
+            lang: ResolvedLang::En,
+            popup_visible: false,
+            muted_since: None,
         }
     }
 
@@ -505,6 +549,7 @@ impl Indicators {
         self.destroy();
         register_classes();
         self.persist = cfg.popup_persist_while_muted;
+        self.lang = lang;
         if cfg.popup_enabled {
             match Renderer::new() {
                 Ok(r) => {
@@ -517,6 +562,7 @@ impl Indicators {
                             )),
                         }
                     }
+                    self.renderer = Some(r);
                 }
                 Err(e) => crate::log::write(format!("overlay: renderer init failed: {e}")),
             }
@@ -563,6 +609,11 @@ impl Indicators {
 
     /// `fresh`: a new mute/unmute event (starts the Glow pulse), not a redraw.
     pub fn show(&mut self, owner: HWND, muted: bool, fresh: bool) {
+        if !muted {
+            self.muted_since = None;
+        } else if fresh || self.muted_since.is_none() {
+            self.muted_since = Some(Instant::now());
+        }
         self.set_strips(muted);
         if muted && fresh && self.glow {
             self.pulse(owner);
@@ -573,14 +624,67 @@ impl Indicators {
         if self.popups.is_empty() {
             return;
         }
+        // Hot path (fresh mute) shows the pre-rendered "· 0:00"; a rebuild redraw
+        // renders the live clock instead so the count carries on.
+        let slot = match (muted, fresh) {
+            (false, _) => 0,
+            (true, true) => 1,
+            (true, false) => {
+                self.draw_clock();
+                2
+            }
+        };
         for p in &self.popups {
-            p.show(muted);
+            p.show(slot);
         }
+        self.popup_visible = true;
         unsafe {
             if muted && self.persist {
                 let _ = KillTimer(Some(owner), TIMER_POPUP_HIDE);
             } else {
                 SetTimer(Some(owner), TIMER_POPUP_HIDE, POPUP_HIDE_MS, None);
+            }
+        }
+        // Only a persistent popup ticks; otherwise it hides on "· 0:00".
+        if muted && self.persist {
+            self.arm_clock(owner);
+        }
+    }
+
+    /// Renders the current mute duration into every popup's clock slot (2).
+    fn draw_clock(&mut self) {
+        let (Some(r), Some(t0)) = (&self.renderer, self.muted_since) else {
+            return;
+        };
+        let text = muted_text(self.lang, t0.elapsed().as_secs());
+        for p in &mut self.popups {
+            if let Err(e) = p.draw(r, 2, GLYPH_MUTED, &text) {
+                crate::log::write(format!("overlay: clock draw failed: {e}"));
+            }
+        }
+    }
+
+    /// TIMER_MUTE_CLOCK handler. The app kills timers on WM_TIMER, so this re-arms
+    /// itself; it stops once the mic is unmuted or the popup is hidden.
+    pub fn tick_clock(&mut self, owner: HWND) {
+        if !self.popup_visible || self.muted_since.is_none() {
+            return;
+        }
+        self.draw_clock();
+        for p in &self.popups {
+            p.show(2);
+        }
+        self.arm_clock(owner);
+    }
+
+    /// SetTimer for the next clock tick; skipped for a null owner (unit tests).
+    fn arm_clock(&self, owner: HWND) {
+        if let Some(t0) = self.muted_since
+            && !owner.is_invalid()
+        {
+            let ms = clock_delay_ms(t0.elapsed().as_millis());
+            unsafe {
+                SetTimer(Some(owner), TIMER_MUTE_CLOCK, ms, None);
             }
         }
     }
@@ -592,6 +696,7 @@ impl Indicators {
     }
 
     pub fn hide_popup(&mut self) {
+        self.popup_visible = false;
         for p in &self.popups {
             p.hide();
         }
@@ -668,7 +773,9 @@ impl Indicators {
         self.glow = false;
         self.pulse_start = None;
         self.alpha = 255;
+        self.popup_visible = false;
         self.popups.clear();
+        self.renderer = None;
         for h in self.strips.drain(..) {
             unsafe {
                 let _ = DestroyWindow(h);
@@ -796,5 +903,28 @@ mod tests {
         assert_eq!(ind.alpha, 100); // hot path left alpha alone
         ind.tick_pulse(HWND::default()); // the restore tick
         assert_eq!(ind.alpha, 255);
+    }
+
+    #[test]
+    fn elapsed_text() {
+        assert_eq!(fmt_elapsed(0), "0:00");
+        assert_eq!(fmt_elapsed(42), "0:42");
+        assert_eq!(fmt_elapsed(3599), "59:59");
+        assert_eq!(fmt_elapsed(3600), "1:00:00");
+        assert_eq!(fmt_elapsed(36125), "10:02:05");
+    }
+
+    #[test]
+    fn clock_survives_non_fresh_show() {
+        let mut ind = Indicators::new();
+        ind.show(HWND::default(), true, true);
+        let t0 = ind.muted_since;
+        assert!(t0.is_some());
+        ind.show(HWND::default(), true, false); // rebuild redraw
+        assert_eq!(ind.muted_since, t0);
+        ind.destroy();
+        assert_eq!(ind.muted_since, t0);
+        ind.show(HWND::default(), false, true);
+        assert_eq!(ind.muted_since, None);
     }
 }

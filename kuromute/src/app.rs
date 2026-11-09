@@ -4,7 +4,7 @@ use crate::config::{self, Config, LoadOutcome, config_path, data_dir};
 use crate::enforcer::{Action, Enforcer};
 use crate::i18n::{self, Key, ResolvedLang, t};
 use crate::msg::*;
-use crate::overlay::{Indicators, TIMER_POPUP_HIDE, TIMER_PULSE};
+use crate::overlay::{Indicators, TIMER_MUTE_CLOCK, TIMER_POPUP_HIDE, TIMER_PULSE};
 use crate::tray::{MenuCmd, Tray, TrayState};
 use crate::update::{self, Release};
 use crate::{audio, autostart, hotkey, log, migrate, monitors, sound};
@@ -619,8 +619,14 @@ impl State {
                     let _ = KillTimer(Some(self.hwnd), wp.0);
                 }
                 match wp.0 {
-                    TIMER_POPUP_HIDE => self.ind.hide_popup(),
+                    TIMER_POPUP_HIDE => {
+                        unsafe {
+                            let _ = KillTimer(Some(self.hwnd), TIMER_MUTE_CLOCK);
+                        }
+                        self.ind.hide_popup();
+                    }
                     TIMER_PULSE => self.ind.tick_pulse(self.hwnd),
+                    TIMER_MUTE_CLOCK => self.ind.tick_clock(self.hwnd),
                     TIMER_DEVICES => {
                         self.devices_armed = false;
                         self.rewatch();
