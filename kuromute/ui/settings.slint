@@ -51,6 +51,18 @@ export global Strings {
     in property <string> guard-enabled;
     in property <string> guard-mode-label;
     in property <[string]> guard-modes;
+    in property <string> sec-general;
+    in property <string> lang-label;
+    in property <[string]> lang-options;
+    in property <string> autostart-label;
+    in property <string> sec-updates;
+    in property <string> check-update;
+    in property <string> open-release;
+    in property <string> logs-label;
+    in property <string> logs-btn;
+    in property <string> bug-label;
+    in property <string> bug-btn;
+    in property <string> made-with-slint;
 }
 
 export struct MonitorItem { label: string, checked: bool }
@@ -165,6 +177,18 @@ export component MainWindow inherits Window {
     in-out property <bool> dev-guard;
     in-out property <int> dev-guard-mode: -1;
     callback dev-changed();
+    // Umum tab (filled by settings::umum)
+    in-out property <int> gen-lang: 0;
+    in-out property <bool> gen-autostart;
+    in property <string> upd-text;
+    in property <string> upd-url;
+    in property <bool> upd-link;
+    in property <bool> upd-busy;
+    callback gen-changed();
+    callback check-update-clicked();
+    callback open-release-clicked();
+    callback open-logs-clicked();
+    callback report-bug-clicked();
     changed tab => { root.tab-opened(root.tab); }
     init => { StdPalette.color-scheme = ColorScheme.dark; }
     title: "Kuro Mute Settings"; // must equal settings::single::WINDOW_TITLE (asserted in ui.rs tests)
@@ -361,7 +385,43 @@ export component MainWindow inherits Window {
                     }
                 }
             }
-            if root.tab == 3: Text { text: Strings.tab-general + " — " + Strings.placeholder; color: Palette.text-dim; horizontal-alignment: center; vertical-alignment: center; }
+            if root.tab == 3: ScrollView {
+                VerticalLayout {
+                    padding: 24px;
+                    spacing: 8px;
+                    alignment: start;
+                    if root.save-error != "": Note { text: root.save-error; color: #ff6b6b; }
+                    SectionTitle { text: Strings.sec-general; }
+                    Row {
+                        label: Strings.lang-label;
+                        ComboBox {
+                            width: 220px;
+                            model: Strings.lang-options;
+                            current-index <=> root.gen-lang;
+                            selected => { root.gen-changed(); }
+                        }
+                    }
+                    Row {
+                        label: Strings.autostart-label;
+                        CheckBox { checked <=> root.gen-autostart; toggled => { root.gen-changed(); } }
+                    }
+                    SectionTitle { text: Strings.sec-updates; }
+                    Row {
+                        label: root.upd-text;
+                        if root.upd-link: Button { text: Strings.open-release; clicked => { root.open-release-clicked(); } }
+                        Button { text: Strings.check-update; enabled: !root.upd-busy; clicked => { root.check-update-clicked(); } }
+                    }
+                    Row {
+                        label: Strings.logs-label;
+                        Button { text: Strings.logs-btn; clicked => { root.open-logs-clicked(); } }
+                    }
+                    Row {
+                        label: Strings.bug-label;
+                        Button { text: Strings.bug-btn; clicked => { root.report-bug-clicked(); } }
+                    }
+                    Note { text: Strings.made-with-slint; color: Palette.text-dim; horizontal-alignment: center; }
+                }
+            }
         }
     }
 }

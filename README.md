@@ -58,6 +58,8 @@ dotnet publish MuteMic.Lite.csproj -c Release -r win-x64 --self-contained false 
 
 To build the Full installer, install [Inno Setup 6](https://jrsoftware.org/isinfo.php) and compile `installer.iss`.
 
+The v2 settings window is made with [Slint](https://slint.dev) (Royalty-free License).
+
 ---
 
 ## Bahasa Indonesia

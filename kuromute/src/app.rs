@@ -39,7 +39,7 @@ const TIMER_DEVICES: usize = 2;
 const TIMER_DISPLAY: usize = 3;
 const TIMER_GUARD_RESUME: usize = 4;
 const TIMER_SETTINGS_WATCH: usize = 5;
-const VERSION: &str = env!("CARGO_PKG_VERSION");
+pub(crate) const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum HotkeyAction {
@@ -112,7 +112,7 @@ fn pct(s: &str) -> String {
         .collect()
 }
 
-fn report_bug_url(build: &str) -> String {
+pub(crate) fn report_bug_url(build: &str) -> String {
     let body =
         format!("**App version:** {VERSION}\n**OS build:** {build}\n\nDescribe the bug here:\n");
     format!(
@@ -121,7 +121,7 @@ fn report_bug_url(build: &str) -> String {
     )
 }
 
-fn os_build() -> String {
+pub(crate) fn os_build() -> String {
     let mut buf = [0u16; 64];
     let mut len = size_of_val(&buf) as u32;
     let r = unsafe {
@@ -142,7 +142,7 @@ fn os_build() -> String {
     String::from_utf16_lossy(&buf[..n])
 }
 
-fn open_url(url: &str) {
+pub(crate) fn open_url(url: &str) {
     unsafe {
         ShellExecuteW(
             None,

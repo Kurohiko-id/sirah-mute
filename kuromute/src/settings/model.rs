@@ -46,9 +46,32 @@ impl Debouncer {
     }
 }
 
+/// Outcome of "Cek update"; `Ok(true)` = a newer release exists.
+#[derive(PartialEq, Debug)]
+pub enum UpdateStatus {
+    Available,
+    UpToDate,
+    Failed,
+}
+
+pub fn update_status(r: Result<bool, String>) -> UpdateStatus {
+    match r {
+        Ok(true) => UpdateStatus::Available,
+        Ok(false) => UpdateStatus::UpToDate,
+        Err(_) => UpdateStatus::Failed,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn update_status_maps() {
+        assert_eq!(update_status(Ok(true)), UpdateStatus::Available);
+        assert_eq!(update_status(Ok(false)), UpdateStatus::UpToDate);
+        assert_eq!(update_status(Err("x".into())), UpdateStatus::Failed);
+    }
 
     #[test]
     fn unplugged_monitor_is_kept() {

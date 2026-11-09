@@ -37,8 +37,7 @@ fn load_state() -> State {
     }
 }
 
-/// (Re)applies every UI string for `lang`; Task 9 calls this on language change.
-#[allow(dead_code)] // called live by Task 9
+/// (Re)applies every UI string for `lang`; the Umum tab calls this on language change.
 pub fn apply_lang(w: &MainWindow, lang: ResolvedLang) {
     let s = w.global::<Strings>();
     s.set_tab_mic(i18n::t(lang, Key::TabMic).into());
@@ -90,6 +89,22 @@ pub fn apply_lang(w: &MainWindow, lang: ResolvedLang) {
     s.set_sec_guard(i18n::t(lang, Key::SecGuard).into());
     s.set_guard_enabled(i18n::t(lang, Key::GuardEnabled).into());
     s.set_guard_mode_label(i18n::t(lang, Key::GuardModeLabel).into());
+    s.set_sec_general(i18n::t(lang, Key::SecGeneral).into());
+    s.set_lang_label(i18n::t(lang, Key::LangLabel).into());
+    s.set_lang_options(super::mic::model(vec![
+        i18n::t(lang, Key::LangAuto).to_string(),
+        "English".into(),
+        "Indonesia".into(),
+    ]));
+    s.set_autostart_label(i18n::t(lang, Key::AutostartLabel).into());
+    s.set_sec_updates(i18n::t(lang, Key::SecUpdates).into());
+    s.set_check_update(i18n::t(lang, Key::CheckUpdateBtn).into());
+    s.set_open_release(i18n::t(lang, Key::OpenRelease).into());
+    s.set_logs_label(i18n::t(lang, Key::LogsLabel).into());
+    s.set_logs_btn(i18n::t(lang, Key::LogsBtn).into());
+    s.set_bug_label(i18n::t(lang, Key::BugLabel).into());
+    s.set_bug_btn(i18n::t(lang, Key::BugBtn).into());
+    s.set_made_with_slint(i18n::t(lang, Key::MadeWithSlint).into());
     s.set_guard_modes(super::mic::model(
         [Key::GuardOff, Key::GuardNotify, Key::GuardAutoRevert]
             .iter()
@@ -170,6 +185,7 @@ pub fn run() -> i32 {
     let (pen, flush_pen) = super::penanda::setup(&w, &state);
     let dev = super::device::setup(&w, &state, mic.sink);
     let refresh_mic = mic.refresh.clone();
+    super::umum::setup(&w, &state, vec![mic.refresh.clone(), pen.clone(), dev.clone()]);
     // Spec §3: re-read devices/monitors whenever a tab that lists them opens.
     w.on_tab_opened(move |t| match t {
         0 => refresh_mic(),
