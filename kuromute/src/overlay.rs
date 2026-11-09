@@ -567,6 +567,9 @@ impl Indicators {
         if muted && fresh && self.glow {
             self.pulse(owner);
         }
+        if self.pulse_start.is_none() && self.alpha != 255 {
+            arm_pulse(owner, 1); // a hide cut a pulse short: restore alpha off this path
+        }
         if self.popups.is_empty() {
             return;
         }
@@ -608,28 +611,26 @@ impl Indicators {
             return;
         }
         self.pulse_start = Some(Instant::now());
-        arm_pulse(owner);
+        arm_pulse(owner, PULSE_TICK_MS);
     }
 
-    /// TIMER_PULSE handler. The app kills timers on WM_TIMER, so this re-arms.
+    /// TIMER_PULSE handler. The app kills timers on WM_TIMER, so this re-arms while
+    /// a pulse runs. With no pulse it only restores full alpha (after a hide) and stops.
     pub fn tick_pulse(&mut self, owner: HWND) {
-        let Some(t0) = self.pulse_start else { return };
-        let ms = u32::try_from(t0.elapsed().as_millis()).unwrap_or(u32::MAX);
-        match pulse_alpha(ms) {
+        let a = self.pulse_start.and_then(|t0| {
+            pulse_alpha(u32::try_from(t0.elapsed().as_millis()).unwrap_or(u32::MAX))
+        });
+        match a {
             Some(a) => {
                 self.set_alpha(a);
-                arm_pulse(owner);
+                arm_pulse(owner, PULSE_TICK_MS);
             }
-            None => self.stop_pulse(),
-        }
-    }
-
-    /// Ends the pulse at full alpha. A pending tick (at most one) finds no
-    /// `pulse_start` and does not re-arm, so no KillTimer (and no owner) is needed.
-    fn stop_pulse(&mut self) {
-        self.pulse_start = None;
-        if self.alpha != 255 {
-            self.set_alpha(255);
+            None => {
+                self.pulse_start = None;
+                if self.alpha != 255 {
+                    self.set_alpha(255);
+                }
+            }
         }
     }
 
@@ -694,7 +695,9 @@ impl Indicators {
             self.raise_strips(SWP_NOREDRAW);
         }
         if !visible {
-            self.stop_pulse(); // after the hide, so a mid-pulse unmute isn't slowed
+            // Hot path: no alpha calls here; `show` arms a restore tick instead.
+            // A pending pulse tick finds no `pulse_start` and does not re-arm.
+            self.pulse_start = None;
         }
     }
 
@@ -741,10 +744,10 @@ impl Indicators {
 }
 
 /// SetTimer for the next pulse tick; skipped for a null owner (unit tests).
-fn arm_pulse(owner: HWND) {
+fn arm_pulse(owner: HWND, ms: u32) {
     if !owner.is_invalid() {
         unsafe {
-            SetTimer(Some(owner), TIMER_PULSE, PULSE_TICK_MS, None);
+            SetTimer(Some(owner), TIMER_PULSE, ms, None);
         }
     }
 }
@@ -782,14 +785,16 @@ mod tests {
     }
 
     #[test]
-    fn stop_pulse_resets_alpha() {
+    fn hide_stops_pulse_then_tick_restores_alpha() {
         let mut ind = Indicators::new();
         ind.pulse(HWND::default()); // no strips: nothing to pulse
         assert_eq!(ind.pulse_start, None);
         ind.pulse_start = Some(Instant::now());
         ind.alpha = 100;
-        ind.hide_all();
+        ind.show(HWND::default(), false, true); // unmute mid-pulse
         assert_eq!(ind.pulse_start, None);
+        assert_eq!(ind.alpha, 100); // hot path left alpha alone
+        ind.tick_pulse(HWND::default()); // the restore tick
         assert_eq!(ind.alpha, 255);
     }
 }
