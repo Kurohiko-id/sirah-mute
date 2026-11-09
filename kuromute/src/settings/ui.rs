@@ -54,6 +54,10 @@ pub fn apply_lang(w: &MainWindow, lang: ResolvedLang) {
     s.set_hotkey_key(i18n::t(lang, Key::PickLabel).into());
     s.set_hotkey_mods(i18n::t(lang, Key::HotkeyMods).into());
     s.set_hotkey_leaks(i18n::t(lang, Key::HotkeyLeaks).into());
+    s.set_sec_talk_warn(i18n::t(lang, Key::SecTalkWarn).into());
+    s.set_talk_warn_enabled(i18n::t(lang, Key::TalkWarnEnabled).into());
+    s.set_talk_warn_source(i18n::t(lang, Key::TalkWarnSource).into());
+    s.set_talk_warn_note(i18n::t(lang, Key::TalkWarnNote).into());
     s.set_sec_test(i18n::t(lang, Key::SecTest).into());
     s.set_test_label(i18n::t(lang, Key::TestLabel).into());
     s.set_test_button(i18n::t(lang, Key::TestButton).into());

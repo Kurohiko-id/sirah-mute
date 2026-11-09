@@ -27,6 +27,10 @@ export global Strings {
     in property <string> hotkey-key;
     in property <string> hotkey-mods;
     in property <string> hotkey-leaks;
+    in property <string> sec-talk-warn;
+    in property <string> talk-warn-enabled;
+    in property <string> talk-warn-source;
+    in property <string> talk-warn-note;
     in property <string> sec-test;
     in property <string> test-label;
     in property <string> test-button;
@@ -147,6 +151,11 @@ export component MainWindow inherits Window {
     in property <[string]> mic-names;
     in-out property <int> mic-index: -1;
     callback mic-selected(int);
+    in-out property <bool> talk-enabled;
+    in property <[string]> talk-mic-names;
+    in-out property <int> talk-mic-index: -1;
+    callback talk-changed();
+    callback talk-mic-selected(int);
     in property <string> hotkey-text;
     in property <bool> recording;
     callback record-clicked();
@@ -282,6 +291,21 @@ export component MainWindow inherits Window {
                     }
                     if root.hotkey-error != "": Note { text: root.hotkey-error; color: #ff6b6b; }
                     if root.hotkey-warn: Note { text: Strings.hotkey-leaks; color: #f7c948; }
+                    SectionTitle { text: Strings.sec-talk-warn; }
+                    Row {
+                        label: Strings.talk-warn-enabled;
+                        CheckBox { checked <=> root.talk-enabled; toggled => { root.talk-changed(); } }
+                    }
+                    if root.talk-enabled: Row {
+                        label: Strings.talk-warn-source;
+                        ComboBox {
+                            width: 300px;
+                            model: root.talk-mic-names;
+                            current-index <=> root.talk-mic-index;
+                            selected => { root.talk-mic-selected(self.current-index); }
+                        }
+                    }
+                    if root.talk-enabled: Note { text: Strings.talk-warn-note; color: Palette.text-dim; }
                     SectionTitle { text: Strings.sec-test; }
                     Row {
                         label: Strings.test-label;

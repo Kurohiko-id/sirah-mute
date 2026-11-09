@@ -61,6 +61,10 @@ pub enum Key {
     HotkeyModOnly,
     HotkeyInUse,
     HotkeyLeaks,
+    SecTalkWarn,
+    TalkWarnEnabled,
+    TalkWarnSource,
+    TalkWarnNote,
     SecTest,
     TestLabel,
     TestButton,
@@ -125,7 +129,7 @@ pub enum Key {
 
 impl Key {
     #[cfg(test)]
-    pub const ALL: [Key; 96] = [
+    pub const ALL: [Key; 100] = [
         Key::Muted,
         Key::Unmuted,
         Key::MicDisconnected,
@@ -162,6 +166,10 @@ impl Key {
         Key::HotkeyModOnly,
         Key::HotkeyInUse,
         Key::HotkeyLeaks,
+        Key::SecTalkWarn,
+        Key::TalkWarnEnabled,
+        Key::TalkWarnSource,
+        Key::TalkWarnNote,
         Key::SecTest,
         Key::TestLabel,
         Key::TestButton,
@@ -306,6 +314,14 @@ pub fn t(l: ResolvedLang, k: Key) -> &'static str {
         (HotkeyInUse, Id) => "{key} sudah dipakai app lain. Pilih yang lain.",
         (HotkeyLeaks, En) => "Modifiers and F12 can also reach games. F13–F24 are safest.",
         (HotkeyLeaks, Id) => "Modifier dan F12 bisa ikut terkirim ke game. F13–F24 paling aman.",
+        (SecTalkWarn, En) => "Talking while muted",
+        (SecTalkWarn, Id) => "Ngomong pas lagi mute",
+        (TalkWarnEnabled, En) => "Warn me when I talk while muted",
+        (TalkWarnEnabled, Id) => "Ingatkan kalau ngomong pas mute",
+        (TalkWarnSource, En) => "Physical mic to listen to",
+        (TalkWarnSource, Id) => "Mic fisik yang dipantau",
+        (TalkWarnNote, En) => "Pick your real mic, not the one you mute. Works only while another app (e.g. Wave Link) is using that mic.",
+        (TalkWarnNote, Id) => "Pilih mic asli, bukan mic yang di-mute. Cuma jalan kalau ada app lain (mis. Wave Link) yang lagi pakai mic itu.",
         (SecTest, En) => "TEST",
         (SecTest, Id) => "TES",
         (TestLabel, En) => "Toggle mute now",

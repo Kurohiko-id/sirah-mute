@@ -135,12 +135,17 @@ pub fn device_choices(
 /// Fills the mic dropdown now; the returned closure re-reads the devices (tab opened).
 fn setup_mics(w: &MainWindow, state: &Rc<RefCell<State>>, sink: HWND) -> Rc<dyn Fn()> {
     let ids: Rc<RefCell<Vec<String>>> = Rc::default();
-    let (ww, st, ids2) = (w.as_weak(), state.clone(), ids.clone());
+    let talk_ids: Rc<RefCell<Vec<String>>> = Rc::default();
+    let (ww, st, ids2, talk2) = (w.as_weak(), state.clone(), ids.clone(), talk_ids.clone());
     let refresh: Rc<dyn Fn()> = Rc::new(move || {
         let Some(w) = ww.upgrade() else { return };
-        let (cur, lang) = {
+        let (cur, talk_cur, lang) = {
             let s = st.borrow();
-            (s.cfg.mic_id.clone(), i18n::resolve(s.cfg.language))
+            (
+                s.cfg.mic_id.clone(),
+                s.cfg.talk_warn_mic_id.clone(),
+                i18n::resolve(s.cfg.language),
+            )
         };
         let (new_ids, names) = device_choices(sink, Flow::Capture, cur.as_ref(), lang);
         w.set_mic_names(model(names));
@@ -149,6 +154,15 @@ fn setup_mics(w: &MainWindow, state: &Rc<RefCell<State>>, sink: HWND) -> Rc<dyn 
                 .map_or(-1, |i| i as i32),
         );
         *ids2.borrow_mut() = new_ids;
+
+        let (new_ids, names) = device_choices(sink, Flow::Capture, talk_cur.as_ref(), lang);
+        w.set_talk_mic_names(model(names));
+        w.set_talk_mic_index(
+            talk_cur
+                .and_then(|c| new_ids.iter().position(|i| *i == c))
+                .map_or(-1, |i| i as i32),
+        );
+        *talk2.borrow_mut() = new_ids;
     });
     refresh();
 
@@ -163,6 +177,26 @@ fn setup_mics(w: &MainWindow, state: &Rc<RefCell<State>>, sink: HWND) -> Rc<dyn 
             commit(&st, &w);
         }
     });
+
+    let (ww, st) = (w.as_weak(), state.clone());
+    w.on_talk_mic_selected(move |i| {
+        let Some(w) = ww.upgrade() else { return };
+        let Some(id) = talk_ids.borrow().get(i as usize).cloned() else {
+            return;
+        };
+        let old = st.borrow_mut().cfg.talk_warn_mic_id.replace(id.clone());
+        if old.as_ref() != Some(&id) {
+            commit(&st, &w);
+        }
+    });
+
+    let (ww, st) = (w.as_weak(), state.clone());
+    w.on_talk_changed(move || {
+        let Some(w) = ww.upgrade() else { return };
+        st.borrow_mut().cfg.talk_warn_enabled = w.get_talk_enabled();
+        commit(&st, &w);
+    });
+    w.set_talk_enabled(state.borrow().cfg.talk_warn_enabled);
     refresh
 }
 
