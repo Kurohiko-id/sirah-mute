@@ -18,6 +18,9 @@ use windows::Win32::System::Threading::GetCurrentProcessId;
 /// Recording session; dropping the `Recorder` removes the Raw Input registration.
 pub struct Mic {
     recorder: Rc<RefCell<Option<Recorder>>>,
+    pub sink: HWND,
+    /// Re-reads the mic list (tab opened).
+    pub refresh: Rc<dyn Fn()>,
 }
 
 impl Mic {
@@ -29,7 +32,7 @@ impl Mic {
     }
 }
 
-fn model(items: Vec<String>) -> ModelRc<SharedString> {
+pub fn model(items: Vec<String>) -> ModelRc<SharedString> {
     ModelRc::new(VecModel::from(
         items
             .into_iter()
@@ -94,13 +97,19 @@ fn choose(w: &MainWindow, state: &Rc<RefCell<State>>, mods: u32, vk: u32) {
     }
 }
 
-fn setup_mics(w: &MainWindow, state: &Rc<RefCell<State>>, sink: HWND) {
-    let lang = i18n::resolve(state.borrow().cfg.language);
+/// Active devices of `flow`, plus the saved `cur` as an extra "(not connected)" entry when absent.
+/// Returns (ids, names) in dropdown order.
+pub fn device_choices(
+    sink: HWND,
+    flow: Flow,
+    cur: Option<&String>,
+    lang: i18n::ResolvedLang,
+) -> (Vec<String>, Vec<String>) {
     unsafe {
         let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
     }
     let all = match Audio::new(sink) {
-        Ok(a) => a.list(Flow::Capture),
+        Ok(a) => a.list(flow),
         Err(e) => {
             crate::log!("settings: audio init failed: {e}");
             Vec::new()
@@ -112,32 +121,49 @@ fn setup_mics(w: &MainWindow, state: &Rc<RefCell<State>>, sink: HWND) {
         ids.push(d.id.clone());
         names.push(d.name.clone());
     }
-    let saved = state.borrow().cfg.mic_id.clone();
-    if let Some(id) = saved.filter(|id| !ids.contains(id)) {
+    if let Some(id) = cur.filter(|id| !ids.contains(id)) {
         let name = all
             .iter()
-            .find(|d| d.id == id)
+            .find(|d| d.id == *id)
             .map_or(id.as_str(), |d| d.name.as_str());
         names.push(format!("{name} {}", i18n::t(lang, Key::MicNotConnected)));
         ids.push(id.clone());
     }
-    let cur = state.borrow().cfg.mic_id.clone();
-    w.set_mic_names(model(names));
-    w.set_mic_index(
-        cur.and_then(|c| ids.iter().position(|i| *i == c))
-            .map_or(-1, |i| i as i32),
-    );
+    (ids, names)
+}
+
+/// Fills the mic dropdown now; the returned closure re-reads the devices (tab opened).
+fn setup_mics(w: &MainWindow, state: &Rc<RefCell<State>>, sink: HWND) -> Rc<dyn Fn()> {
+    let ids: Rc<RefCell<Vec<String>>> = Rc::default();
+    let (ww, st, ids2) = (w.as_weak(), state.clone(), ids.clone());
+    let refresh: Rc<dyn Fn()> = Rc::new(move || {
+        let Some(w) = ww.upgrade() else { return };
+        let (cur, lang) = {
+            let s = st.borrow();
+            (s.cfg.mic_id.clone(), i18n::resolve(s.cfg.language))
+        };
+        let (new_ids, names) = device_choices(sink, Flow::Capture, cur.as_ref(), lang);
+        w.set_mic_names(model(names));
+        w.set_mic_index(
+            cur.and_then(|c| new_ids.iter().position(|i| *i == c))
+                .map_or(-1, |i| i as i32),
+        );
+        *ids2.borrow_mut() = new_ids;
+    });
+    refresh();
 
     let (ww, st) = (w.as_weak(), state.clone());
     w.on_mic_selected(move |i| {
-        let (Some(w), Some(id)) = (ww.upgrade(), ids.get(i as usize)) else {
+        let Some(w) = ww.upgrade() else { return };
+        let Some(id) = ids.borrow().get(i as usize).cloned() else {
             return;
         };
         let old = st.borrow_mut().cfg.mic_id.replace(id.clone());
-        if old.as_ref() != Some(id) {
+        if old.as_ref() != Some(&id) {
             commit(&st, &w);
         }
     });
+    refresh
 }
 
 pub fn setup(w: &MainWindow, state: &Rc<RefCell<State>>) -> Mic {
@@ -148,7 +174,7 @@ pub fn setup(w: &MainWindow, state: &Rc<RefCell<State>>) -> Mic {
             HWND::default()
         }
     };
-    setup_mics(w, state, sink);
+    let refresh = setup_mics(w, state, sink);
     show_hotkey(w, &state.borrow().cfg.hotkey);
 
     let recorder: Rc<RefCell<Option<Recorder>>> = Rc::new(RefCell::new(None));
@@ -211,5 +237,9 @@ pub fn setup(w: &MainWindow, state: &Rc<RefCell<State>>) -> Mic {
         crate::app::post_to_core(MSG_TOGGLE);
     });
 
-    Mic { recorder }
+    Mic {
+        recorder,
+        sink,
+        refresh,
+    }
 }

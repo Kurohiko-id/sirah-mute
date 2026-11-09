@@ -1,4 +1,4 @@
-import { Button, CheckBox, ComboBox, Palette as StdPalette } from "std-widgets.slint";
+import { Button, CheckBox, ComboBox, ScrollView, Slider, Palette as StdPalette } from "std-widgets.slint";
 
 export global Palette {
     out property <color> window-bg: #202020;
@@ -30,7 +30,22 @@ export global Strings {
     in property <string> sec-test;
     in property <string> test-label;
     in property <string> test-button;
+    in property <string> sec-popup;
+    in property <string> popup-enabled;
+    in property <string> popup-position;
+    in property <string> popup-scale;
+    in property <string> popup-persist;
+    in property <string> sec-border;
+    in property <string> border-enabled;
+    in property <string> border-thickness;
+    in property <string> sec-monitors;
+    in property <string> all-monitors;
+    in property <string> sec-sound;
+    in property <string> sound-enabled;
+    in property <[string]> positions;
 }
+
+export struct MonitorItem { label: string, checked: bool }
 
 component SectionTitle inherits Text {
     color: Palette.text-dim;
@@ -118,6 +133,22 @@ export component MainWindow inherits Window {
     in property <bool> hotkey-warn;
     in property <string> save-error;
     callback test-mute();
+    // Penanda tab (filled by settings::penanda)
+    in-out property <bool> pen-popup-enabled;
+    in-out property <int> pen-position-index: -1;
+    in-out property <float> pen-scale: 1.0;
+    in-out property <bool> pen-persist;
+    in-out property <bool> pen-border-enabled;
+    in-out property <float> pen-thickness: 6;
+    in-out property <bool> pen-all-monitors: true;
+    in property <[MonitorItem]> pen-monitors;
+    in-out property <bool> pen-sound;
+    callback pen-changed();
+    callback pen-scale-changed(float);
+    callback pen-thickness-changed(float);
+    callback monitor-toggled(int, bool);
+    callback tab-opened(int);
+    changed tab => { root.tab-opened(root.tab); }
     init => { StdPalette.color-scheme = ColorScheme.dark; }
     title: "Kuro Mute Settings"; // must equal settings::single::WINDOW_TITLE (asserted in ui.rs tests)
     icon: @image-url("../../kuro-mute-mic-logo.png");
@@ -200,7 +231,74 @@ export component MainWindow inherits Window {
                     Button { text: Strings.test-button; clicked => { root.test-mute(); } }
                 }
             }
-            if root.tab == 1: Text { text: Strings.tab-indicator + " — " + Strings.placeholder; color: Palette.text-dim; horizontal-alignment: center; vertical-alignment: center; }
+            if root.tab == 1: ScrollView {
+                VerticalLayout {
+                    padding: 24px;
+                    spacing: 8px;
+                    alignment: start;
+                    if root.save-error != "": Note { text: root.save-error; color: #ff6b6b; }
+                    SectionTitle { text: Strings.sec-popup; }
+                    Row {
+                        label: Strings.popup-enabled;
+                        CheckBox { checked <=> root.pen-popup-enabled; toggled => { root.pen-changed(); } }
+                    }
+                    if root.pen-popup-enabled: Row {
+                        label: Strings.popup-position;
+                        ComboBox {
+                            width: 180px;
+                            model: Strings.positions;
+                            current-index <=> root.pen-position-index;
+                            selected => { root.pen-changed(); }
+                        }
+                    }
+                    if root.pen-popup-enabled: Row {
+                        label: Strings.popup-scale + " " + Math.round(root.pen-scale * 10) / 10 + "x";
+                        Slider {
+                            width: 200px;
+                            minimum: 0.5;
+                            maximum: 2.0;
+                            value: root.pen-scale;
+                            changed(v) => { root.pen-scale-changed(v); }
+                        }
+                    }
+                    if root.pen-popup-enabled: Row {
+                        label: Strings.popup-persist;
+                        CheckBox { checked <=> root.pen-persist; toggled => { root.pen-changed(); } }
+                    }
+                    SectionTitle { text: Strings.sec-border; }
+                    Row {
+                        label: Strings.border-enabled;
+                        CheckBox { checked <=> root.pen-border-enabled; toggled => { root.pen-changed(); } }
+                    }
+                    if root.pen-border-enabled: Row {
+                        label: Strings.border-thickness + " " + Math.round(root.pen-thickness) + " px";
+                        Slider {
+                            width: 200px;
+                            minimum: 1;
+                            maximum: 30;
+                            value: root.pen-thickness;
+                            changed(v) => { root.pen-thickness-changed(v); }
+                        }
+                    }
+                    SectionTitle { text: Strings.sec-monitors; }
+                    Row {
+                        label: Strings.all-monitors;
+                        CheckBox { checked <=> root.pen-all-monitors; toggled => { root.pen-changed(); } }
+                    }
+                    if !root.pen-all-monitors: VerticalLayout {
+                        spacing: 8px;
+                        for m[i] in root.pen-monitors: Row {
+                            label: m.label;
+                            CheckBox { checked: m.checked; toggled => { root.monitor-toggled(i, self.checked); } }
+                        }
+                    }
+                    SectionTitle { text: Strings.sec-sound; }
+                    Row {
+                        label: Strings.sound-enabled;
+                        CheckBox { checked <=> root.pen-sound; toggled => { root.pen-changed(); } }
+                    }
+                }
+            }
             if root.tab == 2: Text { text: Strings.tab-device + " — " + Strings.placeholder; color: Palette.text-dim; horizontal-alignment: center; vertical-alignment: center; }
             if root.tab == 3: Text { text: Strings.tab-general + " — " + Strings.placeholder; color: Palette.text-dim; horizontal-alignment: center; vertical-alignment: center; }
         }

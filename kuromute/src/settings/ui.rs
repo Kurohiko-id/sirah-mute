@@ -58,6 +58,31 @@ pub fn apply_lang(w: &MainWindow, lang: ResolvedLang) {
     s.set_sec_test(i18n::t(lang, Key::SecTest).into());
     s.set_test_label(i18n::t(lang, Key::TestLabel).into());
     s.set_test_button(i18n::t(lang, Key::TestButton).into());
+    s.set_sec_popup(i18n::t(lang, Key::SecPopup).into());
+    s.set_popup_enabled(i18n::t(lang, Key::PopupEnabled).into());
+    s.set_popup_position(i18n::t(lang, Key::PopupPosition).into());
+    s.set_popup_scale(i18n::t(lang, Key::PopupScale).into());
+    s.set_popup_persist(i18n::t(lang, Key::PopupPersist).into());
+    s.set_sec_border(i18n::t(lang, Key::SecBorder).into());
+    s.set_border_enabled(i18n::t(lang, Key::BorderEnabled).into());
+    s.set_border_thickness(i18n::t(lang, Key::BorderThickness).into());
+    s.set_sec_monitors(i18n::t(lang, Key::SecMonitors).into());
+    s.set_all_monitors(i18n::t(lang, Key::AllMonitors).into());
+    s.set_sec_sound(i18n::t(lang, Key::SecSound).into());
+    s.set_sound_enabled(i18n::t(lang, Key::SoundEnabled).into());
+    s.set_positions(super::mic::model(
+        [
+            Key::PosTopLeft,
+            Key::PosTopCenter,
+            Key::PosTopRight,
+            Key::PosBottomLeft,
+            Key::PosBottomCenter,
+            Key::PosBottomRight,
+        ]
+        .iter()
+        .map(|&k| i18n::t(lang, k).to_string())
+        .collect(),
+    ));
 }
 
 /// `SendMessageTimeoutW` to the core window: `Some((result, timed_out))`, `None` = core not running.
@@ -129,6 +154,14 @@ pub fn run() -> i32 {
     };
     apply_lang(&w, i18n::resolve(state.borrow().cfg.language));
     let mic = super::mic::setup(&w, &state);
+    let pen = super::penanda::setup(&w, &state);
+    let refresh_mic = mic.refresh.clone();
+    // Spec §3: re-read devices/monitors whenever a tab that lists them opens.
+    w.on_tab_opened(move |t| match t {
+        0 => refresh_mic(),
+        1 => pen(),
+        _ => {}
+    });
     let res = w.run();
     mic.finish(); // resume the core hotkey if the window closed mid-recording
     if let Err(e) = res {

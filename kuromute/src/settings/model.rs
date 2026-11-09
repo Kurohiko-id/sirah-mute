@@ -65,4 +65,24 @@ mod tests {
         assert!(!d.ready(300));
         assert!(d.ready(400));
     }
+
+    #[test]
+    fn thickness_clamped_by_sanitize() {
+        let c = crate::config::Config {
+            border_thickness: 99,
+            ..Default::default()
+        }
+        .sanitized();
+        assert_eq!(c.border_thickness, 30);
+    }
+
+    #[test]
+    fn scale_value_kept_inside_range() {
+        let c = crate::config::Config {
+            popup_scale: 1.7,
+            ..Default::default()
+        }
+        .sanitized();
+        assert!((c.popup_scale - 1.7).abs() < 1e-6);
+    }
 }
