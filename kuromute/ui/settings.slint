@@ -43,6 +43,14 @@ export global Strings {
     in property <string> sec-sound;
     in property <string> sound-enabled;
     in property <[string]> positions;
+    in property <string> sec-defaults;
+    in property <string> default-input;
+    in property <string> default-output;
+    in property <string> force-on-startup;
+    in property <string> sec-guard;
+    in property <string> guard-enabled;
+    in property <string> guard-mode-label;
+    in property <[string]> guard-modes;
 }
 
 export struct MonitorItem { label: string, checked: bool }
@@ -148,6 +156,15 @@ export component MainWindow inherits Window {
     callback pen-thickness-changed(float);
     callback monitor-toggled(int, bool);
     callback tab-opened(int);
+    // Device tab (filled by settings::device)
+    in property <[string]> dev-output-names;
+    in-out property <int> dev-output-index: 0;
+    in property <[string]> dev-input-names;
+    in-out property <int> dev-input-index: 0;
+    in-out property <bool> dev-force;
+    in-out property <bool> dev-guard;
+    in-out property <int> dev-guard-mode: -1;
+    callback dev-changed();
     changed tab => { root.tab-opened(root.tab); }
     init => { StdPalette.color-scheme = ColorScheme.dark; }
     title: "Kuro Mute Settings"; // must equal settings::single::WINDOW_TITLE (asserted in ui.rs tests)
@@ -299,7 +316,51 @@ export component MainWindow inherits Window {
                     }
                 }
             }
-            if root.tab == 2: Text { text: Strings.tab-device + " — " + Strings.placeholder; color: Palette.text-dim; horizontal-alignment: center; vertical-alignment: center; }
+            if root.tab == 2: ScrollView {
+                VerticalLayout {
+                    padding: 24px;
+                    spacing: 8px;
+                    alignment: start;
+                    if root.save-error != "": Note { text: root.save-error; color: #ff6b6b; }
+                    SectionTitle { text: Strings.sec-defaults; }
+                    Row {
+                        label: Strings.default-output;
+                        ComboBox {
+                            width: 300px;
+                            model: root.dev-output-names;
+                            current-index <=> root.dev-output-index;
+                            selected => { root.dev-changed(); }
+                        }
+                    }
+                    Row {
+                        label: Strings.default-input;
+                        ComboBox {
+                            width: 300px;
+                            model: root.dev-input-names;
+                            current-index <=> root.dev-input-index;
+                            selected => { root.dev-changed(); }
+                        }
+                    }
+                    Row {
+                        label: Strings.force-on-startup;
+                        CheckBox { checked <=> root.dev-force; toggled => { root.dev-changed(); } }
+                    }
+                    SectionTitle { text: Strings.sec-guard; }
+                    Row {
+                        label: Strings.guard-enabled;
+                        CheckBox { checked <=> root.dev-guard; toggled => { root.dev-changed(); } }
+                    }
+                    if root.dev-guard: Row {
+                        label: Strings.guard-mode-label;
+                        ComboBox {
+                            width: 220px;
+                            model: Strings.guard-modes;
+                            current-index <=> root.dev-guard-mode;
+                            selected => { root.dev-changed(); }
+                        }
+                    }
+                }
+            }
             if root.tab == 3: Text { text: Strings.tab-general + " — " + Strings.placeholder; color: Palette.text-dim; horizontal-alignment: center; vertical-alignment: center; }
         }
     }

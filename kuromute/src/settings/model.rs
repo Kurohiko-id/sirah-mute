@@ -21,6 +21,11 @@ pub fn hotkey_warning(h: &Hotkey) -> bool {
     hotkey::leaks_into_games(h)
 }
 
+/// Dropdown index 0 = "don't change" (None); otherwise the device at `index - 1`.
+pub fn default_from_index(index: usize, ids: &[String]) -> Option<String> {
+    index.checked_sub(1).and_then(|i| ids.get(i).cloned())
+}
+
 /// Ready once `ms` has passed since the last bump; never ready before the first bump.
 pub struct Debouncer {
     ms: u64,
@@ -84,5 +89,12 @@ mod tests {
         }
         .sanitized();
         assert!((c.popup_scale - 1.7).abs() < 1e-6);
+    }
+
+    #[test]
+    fn dropdown_index_maps_to_none() {
+        let ids = vec!["X".to_string()];
+        assert_eq!(default_from_index(0, &ids), None);
+        assert_eq!(default_from_index(1, &ids), Some("X".to_string()));
     }
 }

@@ -83,6 +83,19 @@ pub fn apply_lang(w: &MainWindow, lang: ResolvedLang) {
         .map(|&k| i18n::t(lang, k).to_string())
         .collect(),
     ));
+    s.set_sec_defaults(i18n::t(lang, Key::SecDefaults).into());
+    s.set_default_input(i18n::t(lang, Key::DefaultInput).into());
+    s.set_default_output(i18n::t(lang, Key::DefaultOutput).into());
+    s.set_force_on_startup(i18n::t(lang, Key::ForceOnStartup).into());
+    s.set_sec_guard(i18n::t(lang, Key::SecGuard).into());
+    s.set_guard_enabled(i18n::t(lang, Key::GuardEnabled).into());
+    s.set_guard_mode_label(i18n::t(lang, Key::GuardModeLabel).into());
+    s.set_guard_modes(super::mic::model(
+        [Key::GuardOff, Key::GuardNotify, Key::GuardAutoRevert]
+            .iter()
+            .map(|&k| i18n::t(lang, k).to_string())
+            .collect(),
+    ));
 }
 
 /// `SendMessageTimeoutW` to the core window: `Some((result, timed_out))`, `None` = core not running.
@@ -155,11 +168,13 @@ pub fn run() -> i32 {
     apply_lang(&w, i18n::resolve(state.borrow().cfg.language));
     let mic = super::mic::setup(&w, &state);
     let pen = super::penanda::setup(&w, &state);
+    let dev = super::device::setup(&w, &state, mic.sink);
     let refresh_mic = mic.refresh.clone();
     // Spec §3: re-read devices/monitors whenever a tab that lists them opens.
     w.on_tab_opened(move |t| match t {
         0 => refresh_mic(),
         1 => pen(),
+        2 => dev(),
         _ => {}
     });
     let res = w.run();

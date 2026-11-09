@@ -84,11 +84,22 @@ pub enum Key {
     PosBottomLeft,
     PosBottomCenter,
     PosBottomRight,
+    SecDefaults,
+    DefaultInput,
+    DefaultOutput,
+    DontChange,
+    ForceOnStartup,
+    SecGuard,
+    GuardEnabled,
+    GuardModeLabel,
+    GuardOff,
+    GuardNotify,
+    GuardAutoRevert,
 }
 
 impl Key {
     #[cfg(test)]
-    pub const ALL: [Key; 59] = [
+    pub const ALL: [Key; 70] = [
         Key::Muted,
         Key::Unmuted,
         Key::MicDisconnected,
@@ -148,6 +159,17 @@ impl Key {
         Key::PosBottomLeft,
         Key::PosBottomCenter,
         Key::PosBottomRight,
+        Key::SecDefaults,
+        Key::DefaultInput,
+        Key::DefaultOutput,
+        Key::DontChange,
+        Key::ForceOnStartup,
+        Key::SecGuard,
+        Key::GuardEnabled,
+        Key::GuardModeLabel,
+        Key::GuardOff,
+        Key::GuardNotify,
+        Key::GuardAutoRevert,
     ];
 }
 
@@ -282,6 +304,28 @@ pub fn t(l: ResolvedLang, k: Key) -> &'static str {
         (PosBottomCenter, Id) => "Tengah bawah",
         (PosBottomRight, En) => "Bottom right",
         (PosBottomRight, Id) => "Kanan bawah",
+        (SecDefaults, En) => "DEFAULT DEVICES",
+        (SecDefaults, Id) => "DEVICE DEFAULT",
+        (DefaultInput, En) => "Default input",
+        (DefaultInput, Id) => "Input default",
+        (DefaultOutput, En) => "Default output",
+        (DefaultOutput, Id) => "Output default",
+        (DontChange, En) => "Don't change",
+        (DontChange, Id) => "Jangan diubah",
+        (ForceOnStartup, En) => "Apply on startup",
+        (ForceOnStartup, Id) => "Terapkan saat start",
+        (SecGuard, En) => "GUARD",
+        (SecGuard, Id) => "PENJAGAAN",
+        (GuardEnabled, En) => "Guard devices",
+        (GuardEnabled, Id) => "Jaga device",
+        (GuardModeLabel, En) => "When a device changes",
+        (GuardModeLabel, Id) => "Saat device berubah",
+        (GuardOff, En) => "Do nothing",
+        (GuardOff, Id) => "Tidak ngapa-ngapain",
+        (GuardNotify, En) => "Notify me",
+        (GuardNotify, Id) => "Beri tahu",
+        (GuardAutoRevert, En) => "Revert automatically",
+        (GuardAutoRevert, Id) => "Balikin otomatis",
         (AppName, _) => "Kuro Mute & Force Mic",
     }
 }
