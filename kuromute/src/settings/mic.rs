@@ -77,12 +77,11 @@ fn choose(w: &MainWindow, state: &Rc<RefCell<State>>, mods: u32, vk: u32) {
     match hotkey_choice(mods, vk) {
         Ok(h) => {
             w.set_hotkey_error("".into());
-            let mut st = state.borrow_mut();
-            if st.cfg.hotkey != h {
-                st.cfg.hotkey = h;
-                commit(&st, w);
+            let changed = std::mem::replace(&mut state.borrow_mut().cfg.hotkey, h) != h;
+            if changed {
+                commit(state, w);
             }
-            show_hotkey(w, &st.cfg.hotkey);
+            show_hotkey(w, &h);
         }
         Err(e) => {
             let k = match e {
@@ -90,6 +89,7 @@ fn choose(w: &MainWindow, state: &Rc<RefCell<State>>, mods: u32, vk: u32) {
                 HotkeyError::ModifierOnly | HotkeyError::Empty => Key::HotkeyModOnly,
             };
             w.set_hotkey_error(i18n::t(lang, k).into());
+            show_hotkey(w, &state.borrow().cfg.hotkey); // resync controls to the saved hotkey
         }
     }
 }
@@ -133,10 +133,9 @@ fn setup_mics(w: &MainWindow, state: &Rc<RefCell<State>>, sink: HWND) {
         let (Some(w), Some(id)) = (ww.upgrade(), ids.get(i as usize)) else {
             return;
         };
-        let mut s = st.borrow_mut();
-        if s.cfg.mic_id.as_ref() != Some(id) {
-            s.cfg.mic_id = Some(id.clone());
-            commit(&s, &w);
+        let old = st.borrow_mut().cfg.mic_id.replace(id.clone());
+        if old.as_ref() != Some(id) {
+            commit(&st, &w);
         }
     });
 }

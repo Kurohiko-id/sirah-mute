@@ -81,14 +81,17 @@ pub fn send_to_core(name: PCWSTR, wp: usize, lp: isize) -> Option<(isize, bool)>
 }
 
 /// The one save path for every control: write config, ask core to reload, show the outcome.
-pub fn commit(state: &State, w: &MainWindow) -> SaveOutcome {
-    let lang = i18n::resolve(state.cfg.language);
-    let out = save::save_and_reload(
-        state.startup_load_ok,
-        &config::config_path(),
-        &state.cfg,
-        || send_to_core(MSG_RELOAD, 0, 0),
-    );
+/// Takes the RefCell, not a borrow: the borrow is released before SendMessageTimeoutW, which
+/// pumps sent messages and could re-enter other callbacks.
+pub fn commit(state: &RefCell<State>, w: &MainWindow) -> SaveOutcome {
+    let (cfg, load_ok) = {
+        let s = state.borrow();
+        (s.cfg.clone(), s.startup_load_ok)
+    };
+    let lang = i18n::resolve(cfg.language);
+    let out = save::save_and_reload(load_ok, &config::config_path(), &cfg, || {
+        send_to_core(MSG_RELOAD, 0, 0)
+    });
     match &out {
         SaveOutcome::Blocked => w.set_save_error(i18n::t(lang, Key::SaveBlocked).into()),
         SaveOutcome::WriteFailed(e) => {
@@ -100,7 +103,7 @@ pub fn commit(state: &State, w: &MainWindow) -> SaveOutcome {
             match reply {
                 CoreReply::Ok => w.set_hotkey_error("".into()),
                 CoreReply::HotkeyFailed => {
-                    let key = crate::hotkey::display(&state.cfg.hotkey);
+                    let key = crate::hotkey::display(&cfg.hotkey);
                     w.set_hotkey_error(
                         i18n::t(lang, Key::HotkeyInUse)
                             .replace("{key}", &key)

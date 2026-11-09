@@ -29,11 +29,26 @@ pub fn event_from_vk(vk: u32, mods: u32) -> RecordEvent {
     }
 }
 
-fn is_modifier(vk: u32) -> bool {
-    matches!(vk, 0x10 | 0x11 | 0x12 | 0x5B | 0x5C | 0xA0..=0xA5)
+fn mod_bit(vk: u32) -> Option<u32> {
+    match vk {
+        0x10 | 0xA0 | 0xA1 => Some(MOD_SHIFT),
+        0x11 | 0xA2 | 0xA3 => Some(MOD_CONTROL),
+        0x12 | 0xA4 | 0xA5 => Some(MOD_ALT),
+        0x5B | 0x5C => Some(MOD_WIN),
+        _ => None,
+    }
 }
 
-fn current_mods() -> u32 {
+/// Modifier bits after a Raw Input make/break of `vk`; non-modifiers leave `mods` unchanged.
+pub fn apply_mod(mods: u32, vk: u32, is_break: bool) -> u32 {
+    match mod_bit(vk) {
+        Some(b) if is_break => mods & !b,
+        Some(b) => mods | b,
+        None => mods,
+    }
+}
+
+fn held_mods() -> u32 {
     let down = |vk: i32| unsafe { GetAsyncKeyState(vk) } as u16 & 0x8000 != 0;
     let mut m = 0;
     if down(0x11) {
@@ -54,6 +69,9 @@ fn current_mods() -> u32 {
 thread_local! {
     // wndproc and the poll timer both run on the settings UI thread.
     static PENDING: Cell<Option<RecordEvent>> = const { Cell::new(None) };
+    // Modifier state from the Raw Input stream itself, so a fast macro (Ctrl down, F13, Ctrl up)
+    // still records Ctrl+F13 even when WM_INPUT is dispatched after Ctrl is released.
+    static MODS: Cell<u32> = const { Cell::new(0) };
 }
 
 const RI_KEY_BREAK: u16 = 1;
@@ -76,11 +94,15 @@ unsafe extern "system" fn wndproc(h: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> 
             if ri.header.dwType == RIM_TYPEKEYBOARD.0 {
                 let k = unsafe { ri.data.keyboard };
                 let vk = k.VKey as u32;
-                // Modifiers alone never finish recording; they are read at the next key-down.
-                if k.Flags & RI_KEY_BREAK == 0 && !is_modifier(vk) && vk != 0xFF {
+                let is_break = k.Flags & RI_KEY_BREAK != 0;
+                // Modifiers alone never finish recording; they only update MODS.
+                if mod_bit(vk).is_some() {
+                    MODS.with(|m| m.set(apply_mod(m.get(), vk, is_break)));
+                } else if !is_break && vk != 0xFF {
+                    let mods = MODS.with(Cell::get);
                     PENDING.with(|p| {
                         if p.get().is_none() {
-                            p.set(Some(event_from_vk(vk, current_mods())));
+                            p.set(Some(event_from_vk(vk, mods)));
                         }
                     });
                 }
@@ -135,6 +157,7 @@ pub struct Recorder;
 impl Recorder {
     pub fn start(hwnd: HWND) -> windows::core::Result<Recorder> {
         PENDING.with(|p| p.set(None));
+        MODS.with(|m| m.set(held_mods())); // modifiers already down before Rekam
         register(RIDEV_INPUTSINK, hwnd)?;
         Ok(Recorder)
     }
@@ -158,6 +181,17 @@ mod tests {
     #[test]
     fn esc_cancels() {
         assert_eq!(event_from_vk(0x1B, 0), RecordEvent::Cancel);
+    }
+
+    #[test]
+    fn mods_follow_make_and_break() {
+        let m = apply_mod(0, 0x11, false); // Ctrl down
+        assert_eq!(m, MOD_CONTROL);
+        let m = apply_mod(m, 0x5C, false); // RWin down
+        assert_eq!(m, MOD_CONTROL | MOD_WIN);
+        let m = apply_mod(m, 0x7C, false); // F13: not a modifier
+        assert_eq!(m, MOD_CONTROL | MOD_WIN);
+        assert_eq!(apply_mod(m, 0x11, true), MOD_WIN); // Ctrl up
     }
 
     #[test]
