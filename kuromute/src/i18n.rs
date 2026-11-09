@@ -42,11 +42,16 @@ pub enum Key {
     HotkeyInvalid,
     ConfigCorrupt,
     AppName,
+    TabMic,
+    TabIndicator,
+    TabDevice,
+    TabGeneral,
+    TabPlaceholder,
 }
 
 impl Key {
     #[cfg(test)]
-    pub const ALL: [Key; 17] = [
+    pub const ALL: [Key; 22] = [
         Key::Muted,
         Key::Unmuted,
         Key::MicDisconnected,
@@ -64,6 +69,11 @@ impl Key {
         Key::HotkeyInvalid,
         Key::ConfigCorrupt,
         Key::AppName,
+        Key::TabMic,
+        Key::TabIndicator,
+        Key::TabDevice,
+        Key::TabGeneral,
+        Key::TabPlaceholder,
     ];
 }
 
@@ -110,6 +120,14 @@ pub fn t(l: ResolvedLang, k: Key) -> &'static str {
             "Settings file was damaged and has been reset. Backup: config.json.bad"
         }
         (ConfigCorrupt, Id) => "File pengaturan rusak dan direset. Cadangan: config.json.bad",
+        (TabMic, _) => "Mic",
+        (TabIndicator, En) => "Indicator",
+        (TabIndicator, Id) => "Penanda",
+        (TabDevice, _) => "Device",
+        (TabGeneral, En) => "General",
+        (TabGeneral, Id) => "Umum",
+        (TabPlaceholder, En) => "Coming soon",
+        (TabPlaceholder, Id) => "Segera hadir",
         (AppName, _) => "Kuro Mute & Force Mic",
     }
 }

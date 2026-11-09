@@ -74,17 +74,10 @@ fn main() {
                 1
             }
         }
-        Some("--settings") => {
-            // Plan 1 stub: edit config.json by hand, then tell the core to reload.
-            if let Err(e) = std::process::Command::new("notepad.exe")
-                .arg(config::config_path())
-                .status()
-            {
-                log!("settings: notepad failed: {e}");
-            }
-            app::post_to_core(msg::MSG_RELOAD);
-            0
-        }
+        Some("--settings") => match settings::single::acquire() {
+            Some(_guard) => settings::ui::run(),
+            None => 0,
+        },
         _ => app::run(),
     };
     std::process::exit(code);

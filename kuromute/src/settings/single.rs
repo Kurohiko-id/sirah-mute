@@ -6,15 +6,18 @@ use windows::Win32::UI::WindowsAndMessaging::{
 use windows::core::PCWSTR;
 
 pub const SETTINGS_MUTEX: &str = r"Local\KuroMuteSettings";
-/// Slint window title; the UI (Task 5) must use the same string.
+/// Slint window title; settings.slint's title is set from this in ui.rs.
 pub const WINDOW_TITLE: &str = "Kuro Mute Settings";
 
-pub struct SingleGuard(HANDLE);
+/// Holds the mutex; `None` handle = CreateMutexW failed, we run unguarded rather than never open.
+pub struct SingleGuard(Option<HANDLE>);
 
 impl Drop for SingleGuard {
     fn drop(&mut self) {
-        unsafe {
-            let _ = CloseHandle(self.0);
+        if let Some(h) = self.0 {
+            unsafe {
+                let _ = CloseHandle(h);
+            }
         }
     }
 }
@@ -27,7 +30,9 @@ fn wide(s: &str) -> Vec<u16> {
 pub fn acquire() -> Option<SingleGuard> {
     let name = wide(SETTINGS_MUTEX);
     unsafe {
-        let h = CreateMutexW(None, false, PCWSTR(name.as_ptr())).ok()?;
+        let Ok(h) = CreateMutexW(None, false, PCWSTR(name.as_ptr())) else {
+            return Some(SingleGuard(None));
+        };
         if GetLastError() == ERROR_ALREADY_EXISTS {
             let _ = CloseHandle(h);
             // No window yet means the other instance is still starting; nothing to raise.
@@ -38,7 +43,7 @@ pub fn acquire() -> Option<SingleGuard> {
             }
             return None;
         }
-        Some(SingleGuard(h))
+        Some(SingleGuard(Some(h)))
     }
 }
 

@@ -8,4 +8,5 @@ fn main() {
         .set("FileVersion", env!("CARGO_PKG_VERSION"));
     res.compile()
         .expect("winresource: failed to compile resources");
+    slint_build::compile("ui/settings.slint").expect("slint: compile failed");
 }

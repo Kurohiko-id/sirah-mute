@@ -1,0 +1,82 @@
+export global Palette {
+    out property <color> window-bg: #202020;
+    out property <color> sidebar-bg: #1b1b1b;
+    out property <color> card-bg: #2b2b2b;
+    out property <color> item-active: #333333;
+    out property <color> item-hover: #2a2a2a;
+    out property <color> text: #ffffff;
+    out property <color> text-dim: #9d9d9d;
+    out property <color> accent: #60cdff;
+}
+
+// Filled from Rust (ui::apply_lang); Task 9 re-applies on language change.
+export global Strings {
+    in property <string> tab-mic;
+    in property <string> tab-indicator;
+    in property <string> tab-device;
+    in property <string> tab-general;
+    in property <string> placeholder;
+}
+
+component SideItem inherits Rectangle {
+    in property <string> label;
+    in property <bool> active;
+    callback clicked;
+    height: 40px;
+    border-radius: 6px;
+    background: active ? Palette.item-active : ta.has-hover ? Palette.item-hover : transparent;
+    Rectangle {
+        x: 0px;
+        width: 3px;
+        height: 16px;
+        border-radius: 2px;
+        background: Palette.accent;
+        visible: root.active;
+    }
+    Text {
+        x: 16px;
+        text: root.label;
+        color: Palette.text;
+        font-size: 14px;
+        vertical-alignment: center;
+    }
+    ta := TouchArea {
+        clicked => { root.clicked(); }
+    }
+}
+
+export component MainWindow inherits Window {
+    in-out property <int> tab: 0;
+    title: "Kuro Mute Settings"; // must equal settings::single::WINDOW_TITLE (asserted in ui.rs tests)
+    icon: @image-url("../../kuro-mute-mic-logo.png");
+    preferred-width: 760px;
+    preferred-height: 520px;
+    min-width: 760px;
+    max-width: 760px;
+    min-height: 520px;
+    max-height: 520px;
+    background: Palette.window-bg;
+    default-font-size: 14px;
+
+    HorizontalLayout {
+        Rectangle {
+            width: 180px;
+            background: Palette.sidebar-bg;
+            VerticalLayout {
+                padding: 12px;
+                spacing: 4px;
+                alignment: start;
+                SideItem { label: Strings.tab-mic; active: root.tab == 0; clicked => { root.tab = 0; } }
+                SideItem { label: Strings.tab-indicator; active: root.tab == 1; clicked => { root.tab = 1; } }
+                SideItem { label: Strings.tab-device; active: root.tab == 2; clicked => { root.tab = 2; } }
+                SideItem { label: Strings.tab-general; active: root.tab == 3; clicked => { root.tab = 3; } }
+            }
+        }
+        Rectangle {
+            if root.tab == 0: Text { text: Strings.tab-mic + " — " + Strings.placeholder; color: Palette.text-dim; horizontal-alignment: center; vertical-alignment: center; }
+            if root.tab == 1: Text { text: Strings.tab-indicator + " — " + Strings.placeholder; color: Palette.text-dim; horizontal-alignment: center; vertical-alignment: center; }
+            if root.tab == 2: Text { text: Strings.tab-device + " — " + Strings.placeholder; color: Palette.text-dim; horizontal-alignment: center; vertical-alignment: center; }
+            if root.tab == 3: Text { text: Strings.tab-general + " — " + Strings.placeholder; color: Palette.text-dim; horizontal-alignment: center; vertical-alignment: center; }
+        }
+    }
+}
