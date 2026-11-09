@@ -33,11 +33,12 @@ use windows::Win32::Graphics::Gdi::{
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::UI::WindowsAndMessaging::{
     BeginDeferWindowPos, CreateWindowExW, DefWindowProcW, DeferWindowPos, DestroyWindow,
-    EndDeferWindowPos, HTTRANSPARENT, HWND_TOPMOST, KillTimer, LWA_ALPHA, MA_NOACTIVATE,
-    RegisterClassExW, SET_WINDOW_POS_FLAGS, SWP_HIDEWINDOW, SWP_NOACTIVATE, SWP_NOMOVE,
-    SWP_NOREDRAW, SWP_NOSIZE, SWP_SHOWWINDOW, SetLayeredWindowAttributes, SetTimer, SetWindowPos,
-    ULW_ALPHA, UpdateLayeredWindow, WM_MOUSEACTIVATE, WM_NCHITTEST, WNDCLASSEXW, WS_EX_LAYERED,
-    WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_EX_TRANSPARENT, WS_POPUP,
+    EndDeferWindowPos, FindWindowW, HTTRANSPARENT, HWND_TOPMOST, KillTimer, LWA_ALPHA,
+    MA_NOACTIVATE, PostMessageW, RegisterClassExW, SET_WINDOW_POS_FLAGS, SWP_HIDEWINDOW,
+    SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOREDRAW, SWP_NOSIZE, SWP_SHOWWINDOW,
+    SetLayeredWindowAttributes, SetTimer, SetWindowPos, ULW_ALPHA, UpdateLayeredWindow, WM_CLOSE,
+    WM_MOUSEACTIVATE, WM_NCHITTEST, WNDCLASSEXW, WS_EX_LAYERED, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW,
+    WS_EX_TOPMOST, WS_EX_TRANSPARENT, WS_POPUP,
 };
 use windows::core::{BOOL, PCWSTR, Result, w};
 
@@ -64,6 +65,14 @@ unsafe extern "system" fn wndproc(h: HWND, m: u32, wp: WPARAM, lp: LPARAM) -> LR
     match m {
         WM_MOUSEACTIVATE => LRESULT(MA_NOACTIVATE as isize),
         WM_NCHITTEST => LRESULT(HTTRANSPARENT as isize),
+        // taskkill (no /f) closes one visible top-level window per call, and the core
+        // window is hidden, so it hits a strip. Treat that as "close the app".
+        WM_CLOSE => unsafe {
+            if let Ok(core) = FindWindowW(crate::msg::WINDOW_CLASS, PCWSTR::null()) {
+                let _ = PostMessageW(Some(core), WM_CLOSE, WPARAM(0), LPARAM(0));
+            }
+            LRESULT(0)
+        },
         _ => unsafe { DefWindowProcW(h, m, wp, lp) },
     }
 }

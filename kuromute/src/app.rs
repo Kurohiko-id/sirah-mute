@@ -773,9 +773,7 @@ pub fn run() -> i32 {
         }
     }
     STATE.with(|c| c.borrow_mut().take());
-    log!("exit");
-    // ponytail: log writer thread isn't joined; give it a moment to flush.
-    std::thread::sleep(Duration::from_millis(50));
+    log::write_sync("exit");
     0
 }
 
