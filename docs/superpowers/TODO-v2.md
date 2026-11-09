@@ -63,9 +63,17 @@ Hasil tes langsung di PC user (2026-11-09):
 - [ ] Config `border_style` + default untuk config lama, dropdown di Penanda, i18n EN/ID
 - [ ] Ukur ulang latency dan RAM
 
-## Ide yang dicoret
+## Bagian 2c: Peringatan "ngomong pas lagi mute" ⏳
 
-- **Peringatan "ngomong pas lagi mute"** (spike 2026-11-10, `examples/meter_spike.rs`, mic PD400X): begitu endpoint di-mute, `IAudioMeterInformation` dan sample capture WASAPI shared dua-duanya 0,000. Kemungkinan mute-nya di hardware/driver USB. Nggak bisa tanpa ganti cara mute, padahal mute endpoint itu inti app. Alternatif murah: pengingat berkala.
+Spike 2026-11-10 (`examples/meter_spike.rs`):
+- Mute endpoint mic fisik (PD400X) → meter dan sample capture dua-duanya 0,000. Jadi kalau yang di-mute mic fisik, fitur ini nggak bisa.
+- Setup user: yang di-mute **Wave Link MicrophoneFX** (virtual), PD400X tetap hidup. Meter PD400X (`IAudioMeterInformation`, tanpa buka stream sendiri, ngandelin stream Wave Link) tetap kebaca: diam 0,000–0,005, ngomong 0,01–0,13. ✅
+
+Rencana:
+- [ ] Setting di tab Mic: nyalain fitur + pilih "mic sumber" (mic fisik yang dibaca meternya), default mati
+- [ ] Selama mute: poll `GetPeakValue` ±100 ms; di atas ambang (awal ±0,015) selama ≥300 ms → pulse border + popup lagi, opsional beep; cooldown ±10 dtk. Timer mati waktu unmute
+- [ ] Kalau nggak ada app lain yang buka stream di mic sumber, meter 0 → fitur diam (tulis di keterangan UI)
+- [ ] Ambang/sensitivitas: slider atau cukup konstanta, putuskan setelah tes harian
 
 ## Bagian 3: Distribusi ⏳ (belum mulai)
 
