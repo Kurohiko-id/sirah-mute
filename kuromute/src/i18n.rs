@@ -47,11 +47,30 @@ pub enum Key {
     TabDevice,
     TabGeneral,
     TabPlaceholder,
+    SecMic,
+    MicLabel,
+    MicNotConnected,
+    SecHotkey,
+    HotkeyLabel,
+    Record,
+    Recording,
+    RecordFailed,
+    PickLabel,
+    HotkeyMods,
+    HotkeyBareF12,
+    HotkeyModOnly,
+    HotkeyInUse,
+    HotkeyLeaks,
+    SecTest,
+    TestLabel,
+    TestButton,
+    SaveFailed,
+    SaveBlocked,
 }
 
 impl Key {
     #[cfg(test)]
-    pub const ALL: [Key; 22] = [
+    pub const ALL: [Key; 41] = [
         Key::Muted,
         Key::Unmuted,
         Key::MicDisconnected,
@@ -74,6 +93,25 @@ impl Key {
         Key::TabDevice,
         Key::TabGeneral,
         Key::TabPlaceholder,
+        Key::SecMic,
+        Key::MicLabel,
+        Key::MicNotConnected,
+        Key::SecHotkey,
+        Key::HotkeyLabel,
+        Key::Record,
+        Key::Recording,
+        Key::RecordFailed,
+        Key::PickLabel,
+        Key::HotkeyMods,
+        Key::HotkeyBareF12,
+        Key::HotkeyModOnly,
+        Key::HotkeyInUse,
+        Key::HotkeyLeaks,
+        Key::SecTest,
+        Key::TestLabel,
+        Key::TestButton,
+        Key::SaveFailed,
+        Key::SaveBlocked,
     ];
 }
 
@@ -128,6 +166,50 @@ pub fn t(l: ResolvedLang, k: Key) -> &'static str {
         (TabGeneral, Id) => "Umum",
         (TabPlaceholder, En) => "Coming soon",
         (TabPlaceholder, Id) => "Segera hadir",
+        (SecMic, En) => "MICROPHONE",
+        (SecMic, Id) => "MIKROFON",
+        (MicLabel, En) => "Microphone to mute",
+        (MicLabel, Id) => "Mikrofon yang di-mute",
+        (MicNotConnected, En) => "(not connected)",
+        (MicNotConnected, Id) => "(tidak terhubung)",
+        (SecHotkey, En) => "SHORTCUT",
+        (SecHotkey, Id) => "TOMBOL PINTAS",
+        (HotkeyLabel, En) => "Mute shortcut",
+        (HotkeyLabel, Id) => "Tombol mute",
+        (Record, En) => "Record",
+        (Record, Id) => "Rekam",
+        (Recording, En) => "Press a key… (Esc to cancel)",
+        (Recording, Id) => "Tekan tombol… (Esc = batal)",
+        (RecordFailed, En) => "Couldn't start recording. Pick the key from the list.",
+        (RecordFailed, Id) => "Gagal mulai merekam. Pilih tombol dari daftar.",
+        (PickLabel, En) => "Key",
+        (PickLabel, Id) => "Tombol",
+        (HotkeyMods, En) => "Modifiers",
+        (HotkeyMods, Id) => "Modifier",
+        (HotkeyBareF12, En) => {
+            "F12 alone is reserved by Windows. Add a modifier or pick another key."
+        }
+        (HotkeyBareF12, Id) => "F12 saja dipakai Windows. Tambah modifier atau pilih tombol lain.",
+        (HotkeyModOnly, En) => "Pick a key other than Ctrl, Alt, Shift or Win.",
+        (HotkeyModOnly, Id) => "Pilih tombol selain Ctrl, Alt, Shift atau Win.",
+        (HotkeyInUse, En) => "{key} is in use by another app. Pick another.",
+        (HotkeyInUse, Id) => "{key} sudah dipakai app lain. Pilih yang lain.",
+        (HotkeyLeaks, En) => "Modifiers and F12 can also reach games. F13–F24 are safest.",
+        (HotkeyLeaks, Id) => "Modifier dan F12 bisa ikut terkirim ke game. F13–F24 paling aman.",
+        (SecTest, En) => "TEST",
+        (SecTest, Id) => "TES",
+        (TestLabel, En) => "Toggle mute now",
+        (TestLabel, Id) => "Ubah mute sekarang",
+        (TestButton, En) => "Test mute",
+        (TestButton, Id) => "Tes mute",
+        (SaveFailed, En) => "Couldn't save settings: {err}",
+        (SaveFailed, Id) => "Gagal menyimpan pengaturan: {err}",
+        (SaveBlocked, En) => {
+            "Settings file can't be read, so changes aren't saved (to avoid overwriting it)."
+        }
+        (SaveBlocked, Id) => {
+            "File pengaturan tidak bisa dibaca, jadi perubahan tidak disimpan (supaya tidak tertimpa)."
+        }
         (AppName, _) => "Kuro Mute & Force Mic",
     }
 }

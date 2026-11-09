@@ -1,3 +1,5 @@
+import { Button, CheckBox, ComboBox, Palette as StdPalette } from "std-widgets.slint";
+
 export global Palette {
     out property <color> window-bg: #202020;
     out property <color> sidebar-bg: #1b1b1b;
@@ -16,6 +18,57 @@ export global Strings {
     in property <string> tab-device;
     in property <string> tab-general;
     in property <string> placeholder;
+    in property <string> sec-mic;
+    in property <string> mic-label;
+    in property <string> sec-hotkey;
+    in property <string> hotkey-label;
+    in property <string> record;
+    in property <string> recording;
+    in property <string> hotkey-key;
+    in property <string> hotkey-mods;
+    in property <string> hotkey-leaks;
+    in property <string> sec-test;
+    in property <string> test-label;
+    in property <string> test-button;
+}
+
+component SectionTitle inherits Text {
+    color: Palette.text-dim;
+    font-size: 12px;
+    font-weight: 600;
+    min-height: 28px;
+    vertical-alignment: bottom;
+}
+
+// Layout B card row: label left, controls right.
+component Row inherits Rectangle {
+    in property <string> label;
+    min-height: 52px;
+    border-radius: 6px;
+    background: Palette.card-bg;
+    HorizontalLayout {
+        padding-left: 16px;
+        padding-right: 12px;
+        padding-top: 8px;
+        padding-bottom: 8px;
+        spacing: 12px;
+        Text {
+            text: root.label;
+            color: Palette.text;
+            vertical-alignment: center;
+            horizontal-stretch: 1;
+        }
+        HorizontalLayout {
+            alignment: end;
+            spacing: 8px;
+            @children
+        }
+    }
+}
+
+component Note inherits Text {
+    wrap: word-wrap;
+    font-size: 12px;
 }
 
 component SideItem inherits Rectangle {
@@ -47,6 +100,25 @@ component SideItem inherits Rectangle {
 
 export component MainWindow inherits Window {
     in-out property <int> tab: 0;
+    // Mic tab (filled by settings::mic)
+    in property <[string]> mic-names;
+    in-out property <int> mic-index: -1;
+    callback mic-selected(int);
+    in property <string> hotkey-text;
+    in property <bool> recording;
+    callback record-clicked();
+    in property <[string]> key-names;
+    in-out property <int> key-index: -1;
+    in-out property <bool> mod-ctrl;
+    in-out property <bool> mod-alt;
+    in-out property <bool> mod-shift;
+    in-out property <bool> mod-win;
+    callback hotkey-picked();
+    in property <string> hotkey-error;
+    in property <bool> hotkey-warn;
+    in property <string> save-error;
+    callback test-mute();
+    init => { StdPalette.color-scheme = ColorScheme.dark; }
     title: "Kuro Mute Settings"; // must equal settings::single::WINDOW_TITLE (asserted in ui.rs tests)
     icon: @image-url("../../kuro-mute-mic-logo.png");
     preferred-width: 760px;
@@ -73,7 +145,61 @@ export component MainWindow inherits Window {
             }
         }
         Rectangle {
-            if root.tab == 0: Text { text: Strings.tab-mic + " — " + Strings.placeholder; color: Palette.text-dim; horizontal-alignment: center; vertical-alignment: center; }
+            if root.tab == 0: VerticalLayout {
+                padding: 24px;
+                spacing: 8px;
+                alignment: start;
+                if root.save-error != "": Note { text: root.save-error; color: #ff6b6b; }
+                SectionTitle { text: Strings.sec-mic; }
+                Row {
+                    label: Strings.mic-label;
+                    ComboBox {
+                        width: 300px;
+                        model: root.mic-names;
+                        current-index <=> root.mic-index;
+                        selected => { root.mic-selected(self.current-index); }
+                    }
+                }
+                SectionTitle { text: Strings.sec-hotkey; }
+                Row {
+                    label: Strings.hotkey-label;
+                    Text {
+                        text: root.recording ? Strings.recording : root.hotkey-text;
+                        color: root.recording ? Palette.accent : Palette.text;
+                        font-weight: 600;
+                        vertical-alignment: center;
+                    }
+                    Button {
+                        text: Strings.record;
+                        enabled: !root.recording;
+                        clicked => { root.record-clicked(); }
+                    }
+                }
+                Row {
+                    label: Strings.hotkey-key;
+                    ComboBox {
+                        width: 180px;
+                        enabled: !root.recording;
+                        model: root.key-names;
+                        current-index <=> root.key-index;
+                        selected => { root.hotkey-picked(); }
+                    }
+                }
+                Row {
+                    label: Strings.hotkey-mods;
+                    CheckBox { text: "Ctrl"; enabled: !root.recording; checked <=> root.mod-ctrl; toggled => { root.hotkey-picked(); } }
+                    CheckBox { text: "Alt"; enabled: !root.recording; checked <=> root.mod-alt; toggled => { root.hotkey-picked(); } }
+                    CheckBox { text: "Shift"; enabled: !root.recording; checked <=> root.mod-shift; toggled => { root.hotkey-picked(); } }
+                    CheckBox { text: "Win"; enabled: !root.recording; checked <=> root.mod-win; toggled => { root.hotkey-picked(); } }
+                }
+                if root.hotkey-error != "": Note { text: root.hotkey-error; color: #ff6b6b; }
+                if root.hotkey-warn: Note { text: Strings.hotkey-leaks; color: #f7c948; }
+                SectionTitle { text: Strings.sec-test; }
+                Row {
+                    label: Strings.test-label;
+                    Button { text: Strings.test-button; clicked => { root.test-mute(); } }
+                }
+            }
             if root.tab == 1: Text { text: Strings.tab-indicator + " — " + Strings.placeholder; color: Palette.text-dim; horizontal-alignment: center; vertical-alignment: center; }
             if root.tab == 2: Text { text: Strings.tab-device + " — " + Strings.placeholder; color: Palette.text-dim; horizontal-alignment: center; vertical-alignment: center; }
             if root.tab == 3: Text { text: Strings.tab-general + " — " + Strings.placeholder; color: Palette.text-dim; horizontal-alignment: center; vertical-alignment: center; }

@@ -1,6 +1,7 @@
 // removed once Tasks 6-9 use the model/save items
 #![allow(dead_code)]
 
+pub mod mic;
 pub mod model;
 pub mod record;
 pub mod save;
