@@ -14,5 +14,7 @@ pub const WM_APP_TRAY: u32 = WM_APP + 5;
 pub const MSG_RELOAD: PCWSTR = w!("KuroMute.Reload");
 pub const MSG_SHOW_SETTINGS: PCWSTR = w!("KuroMute.ShowSettings");
 pub const MSG_TOGGLE: PCWSTR = w!("KuroMute.Toggle");
+/// wparam: 1 = pause (unregister hotkey), 0 = resume.
+pub const MSG_PAUSE_HOTKEY: PCWSTR = w!("KuroMute.PauseHotkey");
 
 pub const WINDOW_CLASS: PCWSTR = w!("KuroMuteCore");

@@ -35,6 +35,7 @@ const HOTKEY_ID: i32 = 1;
 const TIMER_DEVICES: usize = 2;
 const TIMER_DISPLAY: usize = 3;
 const TIMER_GUARD_RESUME: usize = 4;
+const TIMER_SETTINGS_WATCH: usize = 5;
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
@@ -151,10 +152,15 @@ fn open_url(url: &str) {
     }
 }
 
+pub fn reload_reply_code(hotkey_failed: bool) -> isize {
+    hotkey_failed as isize
+}
+
 struct Registered {
     reload: u32,
     show: u32,
     toggle: u32,
+    pause: u32,
     taskbar: u32,
 }
 
@@ -165,6 +171,7 @@ fn reg() -> &'static Registered {
             reload: RegisterWindowMessageW(MSG_RELOAD),
             show: RegisterWindowMessageW(MSG_SHOW_SETTINGS),
             toggle: RegisterWindowMessageW(MSG_TOGGLE),
+            pause: RegisterWindowMessageW(MSG_PAUSE_HOTKEY),
             taskbar: RegisterWindowMessageW(w!("TaskbarCreated")),
         }
     })
@@ -250,6 +257,9 @@ struct State {
     hotkey_err: Option<String>,
     devices_armed: bool,
     settings_child: Option<Child>,
+    hotkey_paused: bool,
+    /// Reply to MSG_RELOAD: 0 ok, 1 hotkey registration failed.
+    last_reload_code: isize,
 }
 
 impl State {
@@ -506,7 +516,21 @@ impl State {
         }
     }
 
+    fn set_hotkey_paused(&mut self, paused: bool) {
+        self.hotkey_paused = paused;
+        if paused {
+            hotkey::unregister(self.hwnd, HOTKEY_ID);
+            self.arm(TIMER_SETTINGS_WATCH, 1000);
+        } else {
+            unsafe {
+                let _ = KillTimer(Some(self.hwnd), TIMER_SETTINGS_WATCH);
+            }
+            self.register_hotkey();
+        }
+    }
+
     fn reload(&mut self) {
+        self.last_reload_code = 0;
         let new = match config::load(&config_path()) {
             LoadOutcome::Loaded(c) => c,
             LoadOutcome::Corrupt { backup } => {
@@ -536,6 +560,7 @@ impl State {
             hotkey::unregister(self.hwnd, HOTKEY_ID);
             self.register_hotkey();
         }
+        self.last_reload_code = reload_reply_code(self.hotkey_err.is_some());
         if ch.mic {
             self.rewatch();
         }
@@ -579,6 +604,17 @@ impl State {
                     }
                     TIMER_GUARD_RESUME => self.guard_check(),
                     TIMER_DISPLAY => self.rebuild_indicators(),
+                    TIMER_SETTINGS_WATCH if self.hotkey_paused => {
+                        let gone = match self.settings_child.as_mut() {
+                            None => true,
+                            Some(c) => !matches!(c.try_wait(), Ok(None)),
+                        };
+                        if gone {
+                            self.set_hotkey_paused(false);
+                        } else {
+                            self.arm(TIMER_SETTINGS_WATCH, 1000);
+                        }
+                    }
                     _ => {}
                 }
             }
@@ -586,6 +622,7 @@ impl State {
             WM_APP_UPDATE => self.on_update(wp.0 != 0),
             _ if m == r.toggle => self.on_toggle(),
             _ if m == r.reload => self.reload(),
+            _ if m == r.pause => self.set_hotkey_paused(wp.0 != 0),
             _ if m == r.show => self.open_settings(),
             _ if m == r.taskbar => self.tray.readd(),
             _ => {}
@@ -634,12 +671,21 @@ fn is_ours(m: u32) -> bool {
             | WM_APP_DEVICES
             | WM_APP_UPDATE
             | WM_APP_TRAY
-    ) || (m != 0 && [r.reload, r.show, r.toggle, r.taskbar].contains(&m))
+    ) || (m != 0 && [r.reload, r.show, r.toggle, r.pause, r.taskbar].contains(&m))
 }
 
 unsafe extern "system" fn wndproc(h: HWND, m: u32, wp: WPARAM, lp: LPARAM) -> LRESULT {
-    if is_ours(m) && with_state(Some((m, wp, lp)), |s| s.handle(m, wp, lp)) {
+    let mut code = 0;
+    if is_ours(m)
+        && with_state(Some((m, wp, lp)), |s| {
+            s.handle(m, wp, lp);
+            code = s.last_reload_code; // ponytail: deferred reload replies 0 (settings treats it as ok)
+        })
+    {
         // WM_CLOSE / WM_ENDSESSION return 0 (handled) so DefWindowProc doesn't destroy first.
+        if m == reg().reload {
+            return LRESULT(code);
+        }
         return LRESULT((m == WM_POWERBROADCAST) as isize);
     }
     unsafe { DefWindowProcW(h, m, wp, lp) }
@@ -761,6 +807,8 @@ pub fn run() -> i32 {
         hotkey_err: None,
         devices_armed: false,
         settings_child: None,
+        hotkey_paused: false,
+        last_reload_code: 0,
     };
     STATE.with(|c| *c.borrow_mut() = Some(state));
     with_state(None, |s| s.startup(note));
@@ -780,6 +828,12 @@ pub fn run() -> i32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn reload_reply_code_maps_hotkey_state() {
+        assert_eq!(reload_reply_code(false), 0);
+        assert_eq!(reload_reply_code(true), 1);
+    }
 
     #[test]
     fn hotkey_actions() {
