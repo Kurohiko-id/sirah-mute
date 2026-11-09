@@ -14,12 +14,15 @@ use std::process::{Child, Command};
 use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant};
 use windows::Win32::Foundation::{
-    ERROR_ALREADY_EXISTS, ERROR_SUCCESS, GetLastError, HINSTANCE, HWND, LPARAM, LRESULT, WPARAM,
+    CloseHandle, ERROR_ALREADY_EXISTS, ERROR_SUCCESS, GetLastError, HANDLE, HINSTANCE, HWND,
+    LPARAM, LRESULT, WAIT_OBJECT_0, WPARAM,
 };
 use windows::Win32::System::Com::{COINIT_APARTMENTTHREADED, CoInitializeEx};
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::System::Registry::{HKEY_LOCAL_MACHINE, RRF_RT_REG_SZ, RegGetValueW};
-use windows::Win32::System::Threading::CreateMutexW;
+use windows::Win32::System::Threading::{
+    CreateMutexW, OpenProcess, PROCESS_SYNCHRONIZE, WaitForSingleObject,
+};
 use windows::Win32::UI::Shell::{NIN_BALLOONUSERCLICK, NIN_SELECT, ShellExecuteW};
 use windows::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DefWindowProcW, DispatchMessageW, FindWindowW, GetMessageW, KillTimer, MSG,
@@ -257,6 +260,8 @@ struct State {
     hotkey_err: Option<String>,
     devices_armed: bool,
     settings_child: Option<Child>,
+    /// Settings process named by the pause message: Some(None) = open failed (resume at next tick).
+    settings_proc: Option<Option<HANDLE>>,
     hotkey_paused: bool,
     /// Reply to MSG_RELOAD: 0 ok, 1 hotkey registration failed.
     last_reload_code: isize,
@@ -519,18 +524,24 @@ impl State {
         }
     }
 
-    fn set_hotkey_paused(&mut self, paused: bool) {
+    fn set_hotkey_paused(&mut self, paused: bool, pid: u32) {
         if paused == self.hotkey_paused {
             return; // duplicate pause/resume: re-registering would fail
         }
         self.hotkey_paused = paused;
         if paused {
             hotkey::unregister(self.hwnd, HOTKEY_ID);
+            self.settings_proc =
+                (pid != 0).then(|| unsafe { OpenProcess(PROCESS_SYNCHRONIZE, false, pid).ok() });
             self.arm(TIMER_SETTINGS_WATCH, 1000);
         } else {
             unsafe {
                 let _ = KillTimer(Some(self.hwnd), TIMER_SETTINGS_WATCH);
+                if let Some(Some(h)) = self.settings_proc.take() {
+                    let _ = CloseHandle(h);
+                }
             }
+            self.settings_proc = None;
             self.register_hotkey();
         }
     }
@@ -611,12 +622,16 @@ impl State {
                     TIMER_GUARD_RESUME => self.guard_check(),
                     TIMER_DISPLAY => self.rebuild_indicators(),
                     TIMER_SETTINGS_WATCH if self.hotkey_paused => {
-                        let gone = match self.settings_child.as_mut() {
-                            None => true,
-                            Some(c) => !matches!(c.try_wait(), Ok(None)),
+                        let gone = match (self.settings_proc, self.settings_child.as_mut()) {
+                            (Some(None), _) => true,
+                            (Some(Some(h)), _) => {
+                                (unsafe { WaitForSingleObject(h, 0) } == WAIT_OBJECT_0)
+                            }
+                            (None, None) => true,
+                            (None, Some(c)) => !matches!(c.try_wait(), Ok(None)),
                         };
                         if gone {
-                            self.set_hotkey_paused(false);
+                            self.set_hotkey_paused(false, 0);
                         } else {
                             self.arm(TIMER_SETTINGS_WATCH, 1000);
                         }
@@ -628,7 +643,7 @@ impl State {
             WM_APP_UPDATE => self.on_update(wp.0 != 0),
             _ if m == r.toggle => self.on_toggle(),
             _ if m == r.reload => self.reload(),
-            _ if m == r.pause => self.set_hotkey_paused(wp.0 != 0),
+            _ if m == r.pause => self.set_hotkey_paused(wp.0 != 0, lp.0 as u32),
             _ if m == r.show => self.open_settings(),
             _ if m == r.taskbar => self.tray.readd(),
             _ => {}
@@ -813,6 +828,7 @@ pub fn run() -> i32 {
         hotkey_err: None,
         devices_armed: false,
         settings_child: None,
+        settings_proc: None,
         hotkey_paused: false,
         last_reload_code: 0,
     };

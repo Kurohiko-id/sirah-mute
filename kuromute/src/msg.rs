@@ -15,6 +15,7 @@ pub const MSG_RELOAD: PCWSTR = w!("KuroMute.Reload");
 pub const MSG_SHOW_SETTINGS: PCWSTR = w!("KuroMute.ShowSettings");
 pub const MSG_TOGGLE: PCWSTR = w!("KuroMute.Toggle");
 /// wparam: 1 = pause (unregister hotkey), 0 = resume.
+/// lparam (pause only): settings process ID to watch, 0 = unknown (core falls back to its own child).
 pub const MSG_PAUSE_HOTKEY: PCWSTR = w!("KuroMute.PauseHotkey");
 
 pub const WINDOW_CLASS: PCWSTR = w!("KuroMuteCore");
