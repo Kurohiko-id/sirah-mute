@@ -39,18 +39,20 @@ Hasil tes langsung di PC user (2026-11-09):
 - [ ] **Tes di game** (borderless dan fullscreen): cek hotkey nggak bikin stutter dan border kelihatan. Nunggu user.
 - [x] Merge `v2-rust` ke `main` (2026-11-09)
 
-## Bagian 2: Jendela settings ⏳ (belum mulai, wajib sebelum rilis)
+## Bagian 2: Jendela settings ✅ (selesai di branch `v2-settings`, dites manual user 2026-11-09)
 
 - [x] Brainstorm detail → desain: [specs/2026-11-09-v2-settings-design.md](specs/2026-11-09-v2-settings-design.md)
 - [x] Mockup klik-able disetujui user (2026-11-09): https://claude.ai/code/artifact/05e262d6-77f3-43e4-a208-b3d6f618b5c9
 - [x] Tulis plan: [plans/2026-11-09-v2-settings.md](plans/2026-11-09-v2-settings.md) (11 task, belum dieksekusi)
 - [x] Spike Raw Input (2026-11-09): F13 dari keyboard dan mouse masuk (`vk=0x7C`), **tapi cuma kalau core lagi nggak daftarin F13** (RegisterHotKey nelen tombolnya), jadi jeda hotkey saat rekam wajib. F24 tidak dites (user nggak punya). Play/Pause nggak masuk lewat koleksi keyboard (jalur consumer HID), jadi tombol media dipilih lewat dropdown, bukan Rekam.
-- [ ] Mode `--settings` pakai Slint, layout B: sidebar Mic / Penanda / Device / Umum, tema gelap
-- [ ] Mic: pilih device, rekam tombol, dropdown F13–F24 (`hotkey::SELECTABLE_KEYS`), peringatan kalau tombol bisa bocor ke game, tes mute
-- [ ] Penanda: popup (posisi, skala, tetap tampil), border (tebal 1–30), pilih monitor, bunyi
-- [ ] Device: input/output default, paksa saat startup, mode jaga (Off/Notify/AutoRevert)
-- [ ] Umum: bahasa, autostart, cek update, versi, buka folder log, report bug
-- [ ] Simpan otomatis lalu `KuroMute.Reload`. Ganti stub Notepad.
+- [x] Mode `--settings` pakai Slint, layout B: sidebar Mic / Penanda / Device / Umum, tema gelap
+- [x] Mic: pilih device, rekam tombol, dropdown F13–F24 (`hotkey::SELECTABLE_KEYS`), peringatan kalau tombol bisa bocor ke game, tes mute
+- [x] Penanda: popup (posisi, skala, tetap tampil), border (tebal 1–30), pilih monitor, bunyi
+- [x] Device: input/output default, paksa saat startup, mode jaga (Off/Notify/AutoRevert)
+- [x] Umum: bahasa, autostart, cek update, versi, buka folder log, report bug
+- [x] Simpan otomatis lalu `KuroMute.Reload`. Ganti stub Notepad.
+- [x] Ukur (2026-11-09, `tools/measure.ps1`, exe release 14 MB): core RAM 2,44 MB, latency p50 4 ms / p95 12 ms. Tetap satu exe.
+- [ ] Polish ditunda: error merah tetap bahasa lama sampai simpan berikutnya; tombol media cuma lewat dropdown (Rekam tidak tangkap consumer HID); ukuran exe bisa dikecilkan (profil release lto/strip).
 
 ## Bagian 3: Distribusi ⏳ (belum mulai)
 
