@@ -111,13 +111,18 @@ pub enum Key {
     LogsBtn,
     BugLabel,
     BugBtn,
+    SecSupport,
+    SupportSaweria,
+    SupportSaweriaBtn,
+    SupportTopup,
+    SupportTopupBtn,
     MadeWithSlint,
     CoreNotRunning,
 }
 
 impl Key {
     #[cfg(test)]
-    pub const ALL: [Key; 88] = [
+    pub const ALL: [Key; 93] = [
         Key::Muted,
         Key::Unmuted,
         Key::MicDisconnected,
@@ -204,6 +209,11 @@ impl Key {
         Key::LogsBtn,
         Key::BugLabel,
         Key::BugBtn,
+        Key::SecSupport,
+        Key::SupportSaweria,
+        Key::SupportSaweriaBtn,
+        Key::SupportTopup,
+        Key::SupportTopupBtn,
         Key::MadeWithSlint,
         Key::CoreNotRunning,
     ];
@@ -394,6 +404,16 @@ pub fn t(l: ResolvedLang, k: Key) -> &'static str {
         (BugLabel, Id) => "Nemu bug?",
         (BugBtn, En) => "Report bug",
         (BugBtn, Id) => "Report bug",
+        (SecSupport, En) => "Support the developer",
+        (SecSupport, Id) => "Dukung developer",
+        (SupportSaweria, En) => "Buy me a coffee",
+        (SupportSaweria, Id) => "Traktir kopi",
+        (SupportSaweriaBtn, En) => "Saweria",
+        (SupportSaweriaBtn, Id) => "Saweria",
+        (SupportTopup, En) => "Top up your games",
+        (SupportTopup, Id) => "Top up game kamu",
+        (SupportTopupBtn, En) => "KurohikoTopUp.com",
+        (SupportTopupBtn, Id) => "KurohikoTopUp.com",
         (MadeWithSlint, En) => "Made with Slint",
         (MadeWithSlint, Id) => "Dibuat dengan Slint",
         (CoreNotRunning, En) => "Kuro Mute is not running; changes apply on its next start",

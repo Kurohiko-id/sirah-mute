@@ -8,6 +8,8 @@ use slint::ComponentHandle;
 use std::cell::RefCell;
 use std::rc::Rc;
 
+pub const SAWERIA_URL: &str = "https://saweria.co/Kurohiko";
+pub const TOPUP_URL: &str = "https://kurohikotopup.com";
 const LANGS: [Lang; 3] = [Lang::Auto, Lang::En, Lang::Id];
 
 fn selected_lang(w: &MainWindow) -> i18n::ResolvedLang {
@@ -115,4 +117,7 @@ pub fn setup(w: &MainWindow, state: &Rc<RefCell<State>>, refreshers: Vec<Rc<dyn 
     w.on_report_bug_clicked(|| {
         crate::app::open_url(&crate::app::report_bug_url(&crate::app::os_build()));
     });
+
+    w.on_support_saweria_clicked(|| crate::app::open_url(SAWERIA_URL));
+    w.on_support_topup_clicked(|| crate::app::open_url(TOPUP_URL));
 }

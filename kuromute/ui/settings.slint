@@ -63,6 +63,11 @@ export global Strings {
     in property <string> logs-btn;
     in property <string> bug-label;
     in property <string> bug-btn;
+    in property <string> sec-support;
+    in property <string> support-saweria;
+    in property <string> support-saweria-btn;
+    in property <string> support-topup;
+    in property <string> support-topup-btn;
     in property <string> made-with-slint;
 }
 
@@ -192,6 +197,8 @@ export component MainWindow inherits Window {
     callback open-release-clicked();
     callback open-logs-clicked();
     callback report-bug-clicked();
+    callback support-saweria-clicked();
+    callback support-topup-clicked();
     changed tab => { root.tab-opened(root.tab); }
     init => { StdPalette.color-scheme = ColorScheme.dark; }
     title: "Kuro Mute Settings"; // must equal settings::single::WINDOW_TITLE (asserted in ui.rs tests)
@@ -429,6 +436,15 @@ export component MainWindow inherits Window {
                     Row {
                         label: Strings.bug-label;
                         Button { text: Strings.bug-btn; clicked => { root.report-bug-clicked(); } }
+                    }
+                    SectionTitle { text: Strings.sec-support; }
+                    Row {
+                        label: Strings.support-saweria;
+                        Button { text: Strings.support-saweria-btn; clicked => { root.support-saweria-clicked(); } }
+                    }
+                    Row {
+                        label: Strings.support-topup;
+                        Button { text: Strings.support-topup-btn; clicked => { root.support-topup-clicked(); } }
                     }
                     Note { text: Strings.made-with-slint; color: Palette.text-dim; horizontal-alignment: center; }
                 }

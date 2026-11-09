@@ -105,6 +105,11 @@ pub fn apply_lang(w: &MainWindow, lang: ResolvedLang) {
     s.set_logs_btn(i18n::t(lang, Key::LogsBtn).into());
     s.set_bug_label(i18n::t(lang, Key::BugLabel).into());
     s.set_bug_btn(i18n::t(lang, Key::BugBtn).into());
+    s.set_sec_support(i18n::t(lang, Key::SecSupport).into());
+    s.set_support_saweria(i18n::t(lang, Key::SupportSaweria).into());
+    s.set_support_saweria_btn(i18n::t(lang, Key::SupportSaweriaBtn).into());
+    s.set_support_topup(i18n::t(lang, Key::SupportTopup).into());
+    s.set_support_topup_btn(i18n::t(lang, Key::SupportTopupBtn).into());
     s.set_made_with_slint(i18n::t(lang, Key::MadeWithSlint).into());
     s.set_guard_modes(super::mic::model(
         [Key::GuardOff, Key::GuardNotify, Key::GuardAutoRevert]
