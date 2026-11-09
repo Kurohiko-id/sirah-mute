@@ -132,7 +132,28 @@ pub fn device_choices(
     (ids, names)
 }
 
-/// Fills the mic dropdown now; the returned closure re-reads the devices (tab opened).
+/// (ids, names, selected index) for a dropdown whose saved device is `cur`.
+fn fill_list(
+    sink: HWND,
+    cur: Option<&String>,
+    lang: i18n::ResolvedLang,
+) -> (Vec<String>, ModelRc<SharedString>, i32) {
+    let (ids, names) = device_choices(sink, Flow::Capture, cur, lang);
+    let idx = cur
+        .and_then(|c| ids.iter().position(|i| i == c))
+        .map_or(-1, |i| i as i32);
+    (ids, model(names), idx)
+}
+
+/// Stores the device at dropdown row `i` into `slot`; true if it changed.
+fn pick(ids: &RefCell<Vec<String>>, i: i32, slot: &mut Option<String>) -> bool {
+    let Some(id) = ids.borrow().get(i as usize).cloned() else {
+        return false;
+    };
+    slot.replace(id.clone()).as_ref() != Some(&id)
+}
+
+/// Fills the mic and talk-source dropdowns now; the returned closure re-reads the devices (tab opened).
 fn setup_mics(w: &MainWindow, state: &Rc<RefCell<State>>, sink: HWND) -> Rc<dyn Fn()> {
     let ids: Rc<RefCell<Vec<String>>> = Rc::default();
     let talk_ids: Rc<RefCell<Vec<String>>> = Rc::default();
@@ -147,21 +168,14 @@ fn setup_mics(w: &MainWindow, state: &Rc<RefCell<State>>, sink: HWND) -> Rc<dyn 
                 i18n::resolve(s.cfg.language),
             )
         };
-        let (new_ids, names) = device_choices(sink, Flow::Capture, cur.as_ref(), lang);
-        w.set_mic_names(model(names));
-        w.set_mic_index(
-            cur.and_then(|c| new_ids.iter().position(|i| *i == c))
-                .map_or(-1, |i| i as i32),
-        );
+        let (new_ids, names, idx) = fill_list(sink, cur.as_ref(), lang);
+        w.set_mic_names(names);
+        w.set_mic_index(idx);
         *ids2.borrow_mut() = new_ids;
 
-        let (new_ids, names) = device_choices(sink, Flow::Capture, talk_cur.as_ref(), lang);
-        w.set_talk_mic_names(model(names));
-        w.set_talk_mic_index(
-            talk_cur
-                .and_then(|c| new_ids.iter().position(|i| *i == c))
-                .map_or(-1, |i| i as i32),
-        );
+        let (new_ids, names, idx) = fill_list(sink, talk_cur.as_ref(), lang);
+        w.set_talk_mic_names(names);
+        w.set_talk_mic_index(idx);
         *talk2.borrow_mut() = new_ids;
     });
     refresh();
@@ -169,11 +183,7 @@ fn setup_mics(w: &MainWindow, state: &Rc<RefCell<State>>, sink: HWND) -> Rc<dyn 
     let (ww, st) = (w.as_weak(), state.clone());
     w.on_mic_selected(move |i| {
         let Some(w) = ww.upgrade() else { return };
-        let Some(id) = ids.borrow().get(i as usize).cloned() else {
-            return;
-        };
-        let old = st.borrow_mut().cfg.mic_id.replace(id.clone());
-        if old.as_ref() != Some(&id) {
+        if pick(&ids, i, &mut st.borrow_mut().cfg.mic_id) {
             commit(&st, &w);
         }
     });
@@ -181,11 +191,7 @@ fn setup_mics(w: &MainWindow, state: &Rc<RefCell<State>>, sink: HWND) -> Rc<dyn 
     let (ww, st) = (w.as_weak(), state.clone());
     w.on_talk_mic_selected(move |i| {
         let Some(w) = ww.upgrade() else { return };
-        let Some(id) = talk_ids.borrow().get(i as usize).cloned() else {
-            return;
-        };
-        let old = st.borrow_mut().cfg.talk_warn_mic_id.replace(id.clone());
-        if old.as_ref() != Some(&id) {
+        if pick(&talk_ids, i, &mut st.borrow_mut().cfg.talk_warn_mic_id) {
             commit(&st, &w);
         }
     });
