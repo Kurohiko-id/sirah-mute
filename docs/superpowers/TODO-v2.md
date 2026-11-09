@@ -54,6 +54,15 @@ Hasil tes langsung di PC user (2026-11-09):
 - [x] Ukur (2026-11-09, `tools/measure.ps1`, exe release 14 MB): core RAM 2,44 MB, latency p50 4 ms / p95 12 ms. Tetap satu exe.
 - [ ] Polish ditunda: error merah tetap bahasa lama sampai simpan berikutnya; tombol media cuma lewat dropdown (Rekam tidak tangkap consumer HID); ukuran exe bisa dikecilkan (profil release lto/strip).
 
+## Bagian 2b: Border glow + pulse ⏳ (sebelum merge `v2-settings`)
+
+- [x] Sample gaya disetujui user (2026-11-10): https://claude.ai/code/artifact/c176bc3d-1397-44c1-8ed1-a7b97ac54045 (pilih "Glow + pulse awal")
+- [x] Keputusan: jadi pilihan Gaya di tab Penanda (Solid / Glow), default Glow
+- [ ] Glow: strip dilebarin ke dalam, bitmap gradasi alpha per-pixel via `UpdateLayeredWindow` (renderer popup), dirender sekali per `rebuild`
+- [ ] Pulse: 3 kedip (~1,6 dtk) waktu baru mute, cuma ganti alpha global lewat `UpdateLayeredWindow`, timer mati setelahnya. Jalur show tetap cuma buka cloak (latency nggak berubah)
+- [ ] Config `border_style` + default untuk config lama, dropdown di Penanda, i18n EN/ID
+- [ ] Ukur ulang latency dan RAM
+
 ## Bagian 3: Distribusi ⏳ (belum mulai)
 
 - [ ] Installer per-user (Inno Setup, AppId baru): matikan app lama dan watcher Super Lite, ambil alih Run key, shortcut Start Menu
