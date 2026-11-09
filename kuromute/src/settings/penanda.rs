@@ -9,6 +9,8 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use std::time::{Duration, Instant};
 
+type Action = Rc<dyn Fn()>;
+
 const POSITIONS: [Position; 6] = [
     Position::TopLeft,
     Position::TopCenter,
@@ -23,6 +25,7 @@ struct Delayed {
     timer: Timer,
     deb: RefCell<Debouncer>,
     t0: Instant,
+    pending: RefCell<Option<Rc<dyn Fn()>>>,
 }
 
 impl Delayed {
@@ -31,6 +34,7 @@ impl Delayed {
             timer: Timer::default(),
             deb: RefCell::new(Debouncer::new(300)),
             t0: Instant::now(),
+            pending: RefCell::new(None),
         })
     }
 
@@ -38,22 +42,30 @@ impl Delayed {
         self.t0.elapsed().as_millis() as u64
     }
 
+    /// Runs a save that is still waiting out its quiet period (window closing).
+    fn flush(&self) {
+        self.timer.stop();
+        if let Some(save) = self.pending.borrow_mut().take() {
+            save();
+        }
+    }
+
     fn poke(self: &Rc<Self>, save: impl Fn() + 'static) {
         self.deb.borrow_mut().bump(self.now());
+        *self.pending.borrow_mut() = Some(Rc::new(save));
         let me = self.clone();
         self.timer
             .start(TimerMode::Repeated, Duration::from_millis(50), move || {
                 if me.deb.borrow().ready(me.now()) {
-                    me.timer.stop();
-                    save();
+                    me.flush();
                 }
             });
     }
 }
 
-/// Connected monitors plus saved IDs that are not connected: (id, label).
-fn monitor_rows(saved: &[String], lang: i18n::ResolvedLang) -> Vec<(String, String)> {
-    let mut rows: Vec<(String, String)> = monitors::enumerate()
+/// Connected monitors plus saved IDs that match none: (id, gdi name, label).
+fn monitor_rows(saved: &[String], lang: i18n::ResolvedLang) -> Vec<(String, String, String)> {
+    let mut rows: Vec<(String, String, String)> = monitors::enumerate()
         .iter()
         .map(|m| {
             let id = if m.stable_id.is_empty() {
@@ -67,13 +79,13 @@ fn monitor_rows(saved: &[String], lang: i18n::ResolvedLang) -> Vec<(String, Stri
                 m.rect.right - m.rect.left,
                 m.rect.bottom - m.rect.top
             );
-            (id, label)
+            (id, m.gdi_name.clone(), label)
         })
         .collect();
     for id in saved {
-        if !rows.iter().any(|(i, _)| i == id) {
+        if !rows.iter().any(|(i, g, _)| monitors::id_matches(id, i, g)) {
             let label = format!("{id} {}", i18n::t(lang, Key::MicNotConnected));
-            rows.push((id.clone(), label));
+            rows.push((id.clone(), id.clone(), label));
         }
     }
     rows
@@ -97,9 +109,10 @@ fn show(w: &MainWindow, st: &State) {
 }
 
 /// Binds the tab; the returned closure re-enumerates monitors (tab opened).
-pub fn setup(w: &MainWindow, state: &Rc<RefCell<State>>) -> Rc<dyn Fn()> {
+/// Returns (refresh, flush): re-enumerate monitors on tab open; flush pending debounced saves.
+pub fn setup(w: &MainWindow, state: &Rc<RefCell<State>>) -> (Action, Action) {
     show(w, &state.borrow());
-    let ids: Rc<RefCell<Vec<String>>> = Rc::default();
+    let ids: Rc<RefCell<Vec<(String, String)>>> = Rc::default();
 
     let (ww, st, ids2) = (w.as_weak(), state.clone(), ids.clone());
     let refresh: Rc<dyn Fn()> = Rc::new(move || {
@@ -111,13 +124,13 @@ pub fn setup(w: &MainWindow, state: &Rc<RefCell<State>>) -> Rc<dyn Fn()> {
         let rows = monitor_rows(&saved, lang);
         let items: Vec<MonitorItem> = rows
             .iter()
-            .map(|(id, label)| MonitorItem {
+            .map(|(id, gdi, label)| MonitorItem {
                 label: label.as_str().into(),
-                checked: saved.contains(id),
+                checked: saved.iter().any(|s| monitors::id_matches(s, id, gdi)),
             })
             .collect();
         w.set_pen_monitors(ModelRc::new(VecModel::from(items)));
-        *ids2.borrow_mut() = rows.into_iter().map(|(id, _)| id).collect();
+        *ids2.borrow_mut() = rows.into_iter().map(|(id, gdi, _)| (id, gdi)).collect();
     });
     refresh();
 
@@ -144,8 +157,10 @@ pub fn setup(w: &MainWindow, state: &Rc<RefCell<State>>) -> Rc<dyn Fn()> {
         }
     });
 
-    let delayed = Delayed::new();
+    let d_scale = Delayed::new();
+    let d_thick = Delayed::new();
     let (ww, st) = (w.as_weak(), state.clone());
+    let delayed = d_scale.clone();
     w.on_pen_scale_changed(move |v| {
         let v = (v * 10.0).round() / 10.0;
         if (v - st.borrow().cfg.popup_scale).abs() < 1e-6 {
@@ -160,8 +175,8 @@ pub fn setup(w: &MainWindow, state: &Rc<RefCell<State>>) -> Rc<dyn Fn()> {
         });
     });
 
-    let delayed = Delayed::new();
     let (ww, st) = (w.as_weak(), state.clone());
+    let delayed = d_thick.clone();
     w.on_pen_thickness_changed(move |v| {
         let v = v.round() as u32;
         if v == st.borrow().cfg.border_thickness {
@@ -179,13 +194,13 @@ pub fn setup(w: &MainWindow, state: &Rc<RefCell<State>>) -> Rc<dyn Fn()> {
     let (ww, st) = (w.as_weak(), state.clone());
     w.on_monitor_toggled(move |i, on| {
         let Some(w) = ww.upgrade() else { return };
-        let Some(id) = ids.borrow().get(i as usize).cloned() else {
+        let Some((id, gdi)) = ids.borrow().get(i as usize).cloned() else {
             return;
         };
         {
             let mut s = st.borrow_mut();
             let mut v = retain_known(&s.cfg.monitor_ids);
-            v.retain(|x| *x != id);
+            v.retain(|x| !monitors::id_matches(x, &id, &gdi));
             if on {
                 v.push(id);
             }
@@ -194,5 +209,21 @@ pub fn setup(w: &MainWindow, state: &Rc<RefCell<State>>) -> Rc<dyn Fn()> {
         commit(&st, &w);
     });
 
-    refresh
+    let flush: Rc<dyn Fn()> = Rc::new(move || {
+        d_scale.flush();
+        d_thick.flush();
+    });
+    (refresh, flush)
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::monitors::id_matches;
+
+    #[test]
+    fn migrated_gdi_name_matches_connected_monitor() {
+        assert!(id_matches(r"\\.\display1", "STABLE", r"\\.\DISPLAY1"));
+        assert!(id_matches("STABLE", "STABLE", r"\\.\DISPLAY1"));
+        assert!(!id_matches("", "", r"\\.\DISPLAY1"));
+    }
 }

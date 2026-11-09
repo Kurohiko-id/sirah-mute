@@ -167,7 +167,7 @@ pub fn run() -> i32 {
     };
     apply_lang(&w, i18n::resolve(state.borrow().cfg.language));
     let mic = super::mic::setup(&w, &state);
-    let pen = super::penanda::setup(&w, &state);
+    let (pen, flush_pen) = super::penanda::setup(&w, &state);
     let dev = super::device::setup(&w, &state, mic.sink);
     let refresh_mic = mic.refresh.clone();
     // Spec §3: re-read devices/monitors whenever a tab that lists them opens.
@@ -178,6 +178,7 @@ pub fn run() -> i32 {
         _ => {}
     });
     let res = w.run();
+    flush_pen(); // a debounced change may still be waiting
     mic.finish(); // resume the core hotkey if the window closed mid-recording
     if let Err(e) = res {
         crate::log!("settings: run failed: {e}");

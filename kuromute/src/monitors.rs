@@ -88,6 +88,11 @@ pub fn enumerate() -> Vec<Monitor> {
     out
 }
 
+/// A saved id names a monitor if it equals the stable id (non-empty) or the GDI name (any case).
+pub fn id_matches(id: &str, stable_id: &str, gdi_name: &str) -> bool {
+    (!id.is_empty() && id == stable_id) || id.eq_ignore_ascii_case(gdi_name)
+}
+
 pub fn select<'a>(all: &'a [Monitor], all_monitors: bool, ids: &[String]) -> Vec<&'a Monitor> {
     if all_monitors {
         return all.iter().collect();
@@ -96,7 +101,7 @@ pub fn select<'a>(all: &'a [Monitor], all_monitors: bool, ids: &[String]) -> Vec
         .iter()
         .filter(|m| {
             ids.iter().any(|id| {
-                (!id.is_empty() && *id == m.stable_id) || id.eq_ignore_ascii_case(&m.gdi_name)
+                id_matches(id, &m.stable_id, &m.gdi_name)
             })
         })
         .collect();

@@ -274,7 +274,7 @@ export component MainWindow inherits Window {
                             width: 200px;
                             minimum: 0.5;
                             maximum: 2.0;
-                            value: root.pen-scale;
+                            value <=> root.pen-scale;
                             changed(v) => { root.pen-scale-changed(v); }
                         }
                     }
@@ -293,7 +293,7 @@ export component MainWindow inherits Window {
                             width: 200px;
                             minimum: 1;
                             maximum: 30;
-                            value: root.pen-thickness;
+                            value <=> root.pen-thickness;
                             changed(v) => { root.pen-thickness-changed(v); }
                         }
                     }
