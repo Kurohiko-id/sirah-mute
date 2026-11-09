@@ -304,6 +304,9 @@ impl State {
     }
 
     fn register_hotkey(&mut self) {
+        if self.hotkey_paused {
+            return; // resume registers it
+        }
         let h = self.cfg.hotkey;
         let (res, key) = match hotkey::validate(&h) {
             Ok(()) => (
@@ -517,6 +520,9 @@ impl State {
     }
 
     fn set_hotkey_paused(&mut self, paused: bool) {
+        if paused == self.hotkey_paused {
+            return; // duplicate pause/resume: re-registering would fail
+        }
         self.hotkey_paused = paused;
         if paused {
             hotkey::unregister(self.hwnd, HOTKEY_ID);
