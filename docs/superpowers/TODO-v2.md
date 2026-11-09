@@ -63,6 +63,10 @@ Hasil tes langsung di PC user (2026-11-09):
 - [ ] Config `border_style` + default untuk config lama, dropdown di Penanda, i18n EN/ID
 - [ ] Ukur ulang latency dan RAM
 
+## Ide yang dicoret
+
+- **Peringatan "ngomong pas lagi mute"** (spike 2026-11-10, `examples/meter_spike.rs`, mic PD400X): begitu endpoint di-mute, `IAudioMeterInformation` dan sample capture WASAPI shared dua-duanya 0,000. Kemungkinan mute-nya di hardware/driver USB. Nggak bisa tanpa ganti cara mute, padahal mute endpoint itu inti app. Alternatif murah: pengingat berkala.
+
 ## Bagian 3: Distribusi ⏳ (belum mulai)
 
 - [ ] Installer per-user (Inno Setup, AppId baru): matikan app lama dan watcher Super Lite, ambil alih Run key, shortcut Start Menu
