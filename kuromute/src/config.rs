@@ -23,6 +23,12 @@ pub enum GuardMode {
     AutoRevert,
 }
 #[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Debug, Default)]
+pub enum BorderStyle {
+    Solid,
+    #[default]
+    Glow,
+}
+#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Debug, Default)]
 pub enum Lang {
     #[default]
     Auto,
@@ -70,6 +76,8 @@ pub struct Config {
     pub popup_persist_while_muted: bool,
     pub border_enabled: bool,
     pub border_thickness: u32,
+    #[serde(deserialize_with = "or_default")]
+    pub border_style: BorderStyle,
     pub all_monitors: bool,
     pub monitor_ids: Vec<String>,
     pub sound_enabled: bool,
@@ -96,6 +104,7 @@ impl Default for Config {
             popup_persist_while_muted: false,
             border_enabled: false,
             border_thickness: 6,
+            border_style: BorderStyle::default(),
             all_monitors: true,
             monitor_ids: Vec::new(),
             sound_enabled: false,
@@ -230,6 +239,13 @@ mod tests {
             (c.popup_position, c.border_thickness),
             (Position::BottomCenter, 11)
         );
+    }
+    #[test]
+    fn border_style_defaults_to_glow_for_old_configs() {
+        let c: Config = serde_json::from_str(r#"{"border_thickness":6}"#).unwrap();
+        assert_eq!(c.border_style, BorderStyle::Glow);
+        let c: Config = serde_json::from_str(r#"{"border_style":"Neon"}"#).unwrap();
+        assert_eq!(c.border_style, BorderStyle::Glow);
     }
     #[test]
     fn save_then_load_roundtrip_and_no_tmp_left() {

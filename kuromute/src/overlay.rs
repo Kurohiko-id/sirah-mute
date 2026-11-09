@@ -1,7 +1,7 @@
 //! Layered overlay windows: per-monitor mute popup (Direct2D-rendered, per-pixel
 //! alpha) and red border strips. Windows never take focus or mouse input.
 
-use crate::config::Config;
+use crate::config::{BorderStyle, Config};
 use crate::geometry::{Rect, border_strips, popup_rect};
 use crate::i18n::{Key, ResolvedLang, t};
 use crate::monitors::Monitor;
@@ -47,6 +47,7 @@ const POPUP_HIDE_MS: u32 = 1500;
 const POPUP_CLASS: PCWSTR = w!("KuroMutePopup");
 const BORDER_CLASS: PCWSTR = w!("KuroMuteBorder");
 const BORDER_COLOR: COLORREF = COLORREF(0x004D_48E5); // #E5484D as 0x00BBGGRR
+const BORDER_RGB: u32 = 0xE5484D;
 const GLYPH_MUTED: &str = "\u{E74F}"; // MicOff (OverlayForm.cs:88)
 const GLYPH_UNMUTED: &str = "\u{E720}"; // Microphone
 
@@ -356,6 +357,94 @@ impl Renderer {
     }
 }
 
+/// Glow strip depth: solid core plus fade, 5x thickness capped at 96 px.
+pub fn glow_extent(t: u32) -> u32 {
+    (5 * t).min(96).max(t)
+}
+
+/// Alpha at `d` px from the screen edge: solid core of `t`, then a quadratic fade
+/// from 128 to 0 over the rest of `glow_extent(t)`.
+pub fn glow_alpha(d: u32, t: u32) -> u8 {
+    let e = glow_extent(t);
+    if d < t {
+        return 255;
+    }
+    if d >= e {
+        return 0;
+    }
+    let x = (d - t) as f32 / (e - t) as f32;
+    (128.0 * (1.0 - x) * (1.0 - x)).round() as u8
+}
+
+/// Paints one glow strip (per-pixel alpha, premultiplied) and pushes it once.
+/// The DIB and DC are freed before returning; the window keeps its own copy.
+fn paint_glow(h: HWND, r: Rect, mon: Rect, t: u32) -> Result<()> {
+    let (w, ht) = (r.right - r.left, r.bottom - r.top);
+    let bmi = BITMAPINFO {
+        bmiHeader: BITMAPINFOHEADER {
+            biSize: size_of::<BITMAPINFOHEADER>() as u32,
+            biWidth: w,
+            biHeight: -ht, // top-down
+            biPlanes: 1,
+            biBitCount: 32,
+            biCompression: BI_RGB.0,
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    unsafe {
+        let dc = CreateCompatibleDC(None);
+        let mut bits = std::ptr::null_mut();
+        let bmp = match CreateDIBSection(Some(dc), &bmi, DIB_RGB_COLORS, &mut bits, None, 0) {
+            Ok(b) => b,
+            Err(e) => {
+                let _ = DeleteDC(dc);
+                return Err(e);
+            }
+        };
+        let px = std::slice::from_raw_parts_mut(bits as *mut u32, (w * ht) as usize);
+        for y in 0..ht {
+            let sy = r.top + y;
+            for x in 0..w {
+                let sx = r.left + x;
+                let d = (sx - mon.left)
+                    .min(mon.right - 1 - sx)
+                    .min(sy - mon.top)
+                    .min(mon.bottom - 1 - sy)
+                    .max(0) as u32;
+                let a = glow_alpha(d, t) as u32;
+                let ch = |sh: u32| ((BORDER_RGB >> sh) & 0xFF) * a / 255;
+                px[(y * w + x) as usize] = a << 24 | ch(16) << 16 | ch(8) << 8 | ch(0);
+            }
+        }
+        let old = SelectObject(dc, bmp.into());
+        let blend = BLENDFUNCTION {
+            BlendOp: AC_SRC_OVER as u8,
+            BlendFlags: 0,
+            SourceConstantAlpha: 255,
+            AlphaFormat: AC_SRC_ALPHA as u8,
+        };
+        let res = UpdateLayeredWindow(
+            h,
+            None,
+            Some(&POINT {
+                x: r.left,
+                y: r.top,
+            }),
+            Some(&SIZE { cx: w, cy: ht }),
+            Some(dc),
+            Some(&POINT::default()),
+            COLORREF(0),
+            Some(&blend),
+            ULW_ALPHA,
+        );
+        SelectObject(dc, old);
+        let _ = DeleteObject(bmp.into());
+        let _ = DeleteDC(dc);
+        res
+    }
+}
+
 fn has_family(dw: &IDWriteFactory, name: PCWSTR) -> bool {
     let mut coll = None;
     unsafe {
@@ -373,6 +462,8 @@ pub struct Indicators {
     popups: Vec<Popup>,
     strips: Vec<HWND>,
     persist: bool,
+    /// Strips were built with per-pixel alpha (UpdateLayeredWindow), not LWA_ALPHA.
+    glow: bool,
     /// DWM cloak failed: strips are shown/hidden the old (slower) SWP way.
     fallback: bool,
     strips_visible: bool,
@@ -384,6 +475,7 @@ impl Indicators {
             popups: Vec::new(),
             strips: Vec::new(),
             persist: false,
+            glow: false,
             fallback: false,
             strips_visible: false,
         }
@@ -410,17 +502,32 @@ impl Indicators {
             }
         }
         if cfg.border_enabled {
+            let t = cfg.border_thickness;
+            self.glow = cfg.border_style == BorderStyle::Glow;
+            let depth = if self.glow { glow_extent(t) } else { t };
             for m in mons {
-                for r in border_strips(m.rect, cfg.border_thickness) {
-                    match create_window(BORDER_CLASS, r) {
-                        Ok(h) => {
-                            unsafe {
-                                let _ = SetLayeredWindowAttributes(h, COLORREF(0), 255, LWA_ALPHA);
-                            }
-                            self.strips.push(h);
+                for r in border_strips(m.rect, depth) {
+                    let h = match create_window(BORDER_CLASS, r) {
+                        Ok(h) => h,
+                        Err(e) => {
+                            crate::log::write(format!("overlay: border strip failed: {e}"));
+                            continue;
                         }
-                        Err(e) => crate::log::write(format!("overlay: border strip failed: {e}")),
+                    };
+                    if self.glow {
+                        if let Err(e) = paint_glow(h, r, m.rect, t) {
+                            crate::log::write(format!("overlay: glow strip failed: {e}"));
+                            unsafe {
+                                let _ = DestroyWindow(h);
+                            }
+                            continue;
+                        }
+                    } else {
+                        unsafe {
+                            let _ = SetLayeredWindowAttributes(h, COLORREF(0), 255, LWA_ALPHA);
+                        }
                     }
+                    self.strips.push(h);
                 }
             }
             // Shown (topmost) once here, cloaked; show/hide only toggles the cloak.
@@ -472,6 +579,7 @@ impl Indicators {
 
     pub fn destroy(&mut self) {
         self.strips_visible = false;
+        self.glow = false;
         self.popups.clear();
         for h in self.strips.drain(..) {
             unsafe {
@@ -545,5 +653,23 @@ impl Indicators {
 impl Drop for Indicators {
     fn drop(&mut self) {
         self.destroy();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn glow_falloff() {
+        assert_eq!(glow_extent(6), 30); // 5t
+        assert_eq!(glow_extent(30), 96); // capped
+        assert_eq!(glow_alpha(0, 6), 255);
+        assert_eq!(glow_alpha(5, 6), 255);
+        assert!((110..=140).contains(&glow_alpha(6, 6)));
+        assert_eq!(glow_alpha(glow_extent(6), 6), 0);
+        for d in 6..30 {
+            assert!(glow_alpha(d + 1, 6) <= glow_alpha(d, 6));
+        }
     }
 }

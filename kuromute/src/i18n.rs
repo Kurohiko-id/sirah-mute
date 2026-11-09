@@ -74,6 +74,9 @@ pub enum Key {
     SecBorder,
     BorderEnabled,
     BorderThickness,
+    BorderStyle,
+    BorderSolid,
+    BorderGlow,
     SecMonitors,
     AllMonitors,
     SecSound,
@@ -122,7 +125,7 @@ pub enum Key {
 
 impl Key {
     #[cfg(test)]
-    pub const ALL: [Key; 93] = [
+    pub const ALL: [Key; 96] = [
         Key::Muted,
         Key::Unmuted,
         Key::MicDisconnected,
@@ -172,6 +175,9 @@ impl Key {
         Key::SecBorder,
         Key::BorderEnabled,
         Key::BorderThickness,
+        Key::BorderStyle,
+        Key::BorderSolid,
+        Key::BorderGlow,
         Key::SecMonitors,
         Key::AllMonitors,
         Key::SecSound,
@@ -330,6 +336,12 @@ pub fn t(l: ResolvedLang, k: Key) -> &'static str {
         (BorderEnabled, Id) => "Tampilkan bingkai",
         (BorderThickness, En) => "Thickness",
         (BorderThickness, Id) => "Ketebalan",
+        (BorderStyle, En) => "Style",
+        (BorderStyle, Id) => "Gaya",
+        (BorderSolid, En) => "Solid",
+        (BorderSolid, Id) => "Solid",
+        (BorderGlow, En) => "Glow",
+        (BorderGlow, Id) => "Glow",
         (SecMonitors, En) => "MONITORS",
         (SecMonitors, Id) => "MONITOR",
         (AllMonitors, En) => "All monitors",

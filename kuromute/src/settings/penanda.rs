@@ -1,7 +1,7 @@
 //! Penanda tab glue: popup, border, monitors, sound.
 use super::model::{Debouncer, retain_known};
 use super::ui::{MainWindow, MonitorItem, State, commit};
-use crate::config::Position;
+use crate::config::{BorderStyle, Position};
 use crate::i18n::{self, Key};
 use crate::monitors;
 use slint::{ComponentHandle, ModelRc, Timer, TimerMode, VecModel};
@@ -19,6 +19,8 @@ const POSITIONS: [Position; 6] = [
     Position::BottomCenter,
     Position::BottomRight,
 ];
+
+const STYLES: [BorderStyle; 2] = [BorderStyle::Solid, BorderStyle::Glow];
 
 /// Saves once, 300 ms after the last `poke`.
 struct Delayed {
@@ -104,6 +106,12 @@ fn show(w: &MainWindow, st: &State) {
     w.set_pen_persist(c.popup_persist_while_muted);
     w.set_pen_border_enabled(c.border_enabled);
     w.set_pen_thickness(c.border_thickness as f32);
+    w.set_pen_border_style_index(
+        STYLES
+            .iter()
+            .position(|s| *s == c.border_style)
+            .map_or(-1, |i| i as i32),
+    );
     w.set_pen_all_monitors(c.all_monitors);
     w.set_pen_sound(c.sound_enabled);
 }
@@ -148,6 +156,9 @@ pub fn setup(w: &MainWindow, state: &Rc<RefCell<State>>) -> (Action, Action) {
             }
             c.popup_persist_while_muted = w.get_pen_persist();
             c.border_enabled = w.get_pen_border_enabled();
+            if let Some(s) = STYLES.get(w.get_pen_border_style_index() as usize) {
+                c.border_style = *s;
+            }
             c.all_monitors = w.get_pen_all_monitors();
             c.sound_enabled = w.get_pen_sound();
             before != *c

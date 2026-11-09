@@ -74,6 +74,7 @@ pub fn diff(o: &Config, n: &Config) -> Changes {
             || o.popup_persist_while_muted != n.popup_persist_while_muted
             || o.border_enabled != n.border_enabled
             || o.border_thickness != n.border_thickness
+            || o.border_style != n.border_style
             || o.all_monitors != n.all_monitors
             || o.monitor_ids != n.monitor_ids
             || o.language != n.language,
@@ -883,6 +884,22 @@ mod tests {
         let a = Config::default();
         let b = Config {
             border_thickness: 9,
+            ..a.clone()
+        };
+        assert_eq!(
+            diff(&a, &b),
+            Changes {
+                indicators: true,
+                ..Default::default()
+            }
+        );
+    }
+
+    #[test]
+    fn diff_border_style_only_indicators() {
+        let a = Config::default();
+        let b = Config {
+            border_style: crate::config::BorderStyle::Solid,
             ..a.clone()
         };
         assert_eq!(

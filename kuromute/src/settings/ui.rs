@@ -65,6 +65,13 @@ pub fn apply_lang(w: &MainWindow, lang: ResolvedLang) {
     s.set_sec_border(i18n::t(lang, Key::SecBorder).into());
     s.set_border_enabled(i18n::t(lang, Key::BorderEnabled).into());
     s.set_border_thickness(i18n::t(lang, Key::BorderThickness).into());
+    s.set_border_style(i18n::t(lang, Key::BorderStyle).into());
+    s.set_border_styles(super::mic::model(
+        [Key::BorderSolid, Key::BorderGlow]
+            .iter()
+            .map(|&k| i18n::t(lang, k).to_string())
+            .collect(),
+    ));
     s.set_sec_monitors(i18n::t(lang, Key::SecMonitors).into());
     s.set_all_monitors(i18n::t(lang, Key::AllMonitors).into());
     s.set_sec_sound(i18n::t(lang, Key::SecSound).into());
