@@ -97,6 +97,7 @@ pub fn apply_lang(w: &MainWindow, lang: ResolvedLang) {
         "Indonesia".into(),
     ]));
     s.set_autostart_label(i18n::t(lang, Key::AutostartLabel).into());
+    s.set_version_label(i18n::t(lang, Key::VersionLabel).into());
     s.set_sec_updates(i18n::t(lang, Key::SecUpdates).into());
     s.set_check_update(i18n::t(lang, Key::CheckUpdateBtn).into());
     s.set_open_release(i18n::t(lang, Key::OpenRelease).into());

@@ -55,6 +55,7 @@ export global Strings {
     in property <string> lang-label;
     in property <[string]> lang-options;
     in property <string> autostart-label;
+    in property <string> version-label;
     in property <string> sec-updates;
     in property <string> check-update;
     in property <string> open-release;
@@ -181,6 +182,7 @@ export component MainWindow inherits Window {
     // Umum tab (filled by settings::umum)
     in-out property <int> gen-lang: 0;
     in-out property <bool> gen-autostart;
+    in property <string> app-version;
     in property <string> upd-text;
     in property <string> upd-url;
     in property <bool> upd-link;
@@ -217,60 +219,64 @@ export component MainWindow inherits Window {
                 SideItem { label: Strings.tab-general; active: root.tab == 3; clicked => { root.tab = 3; } }
             }
         }
-        Rectangle {
-            if root.tab == 0: VerticalLayout {
-                padding: 24px;
-                spacing: 8px;
-                alignment: start;
-                if root.save-error != "": Note { text: root.save-error; color: #ff6b6b; }
-                SectionTitle { text: Strings.sec-mic; }
-                Row {
-                    label: Strings.mic-label;
-                    ComboBox {
-                        width: 300px;
-                        model: root.mic-names;
-                        current-index <=> root.mic-index;
-                        selected => { root.mic-selected(self.current-index); }
+        VerticalLayout {
+          Rectangle {
+            vertical-stretch: 1;
+            if root.tab == 0: ScrollView {
+                VerticalLayout {
+                    padding: 24px;
+                    spacing: 8px;
+                    alignment: start;
+                    if root.save-error != "": Note { text: root.save-error; color: #ff6b6b; }
+                    SectionTitle { text: Strings.sec-mic; }
+                    Row {
+                        label: Strings.mic-label;
+                        ComboBox {
+                            width: 300px;
+                            model: root.mic-names;
+                            current-index <=> root.mic-index;
+                            selected => { root.mic-selected(self.current-index); }
+                        }
                     }
-                }
-                SectionTitle { text: Strings.sec-hotkey; }
-                Row {
-                    label: Strings.hotkey-label;
-                    Text {
-                        text: root.recording ? Strings.recording : root.hotkey-text;
-                        color: root.recording ? Palette.accent : Palette.text;
-                        font-weight: 600;
-                        vertical-alignment: center;
+                    SectionTitle { text: Strings.sec-hotkey; }
+                    Row {
+                        label: Strings.hotkey-label;
+                        Text {
+                            text: root.recording ? Strings.recording : root.hotkey-text;
+                            color: root.recording ? Palette.accent : Palette.text;
+                            font-weight: 600;
+                            vertical-alignment: center;
+                        }
+                        Button {
+                            text: Strings.record;
+                            enabled: !root.recording;
+                            clicked => { root.record-clicked(); }
+                        }
                     }
-                    Button {
-                        text: Strings.record;
-                        enabled: !root.recording;
-                        clicked => { root.record-clicked(); }
+                    Row {
+                        label: Strings.hotkey-key;
+                        ComboBox {
+                            width: 180px;
+                            enabled: !root.recording;
+                            model: root.key-names;
+                            current-index <=> root.key-index;
+                            selected => { root.hotkey-picked(); }
+                        }
                     }
-                }
-                Row {
-                    label: Strings.hotkey-key;
-                    ComboBox {
-                        width: 180px;
-                        enabled: !root.recording;
-                        model: root.key-names;
-                        current-index <=> root.key-index;
-                        selected => { root.hotkey-picked(); }
+                    Row {
+                        label: Strings.hotkey-mods;
+                        CheckBox { text: "Ctrl"; enabled: !root.recording; checked <=> root.mod-ctrl; toggled => { root.hotkey-picked(); } }
+                        CheckBox { text: "Alt"; enabled: !root.recording; checked <=> root.mod-alt; toggled => { root.hotkey-picked(); } }
+                        CheckBox { text: "Shift"; enabled: !root.recording; checked <=> root.mod-shift; toggled => { root.hotkey-picked(); } }
+                        CheckBox { text: "Win"; enabled: !root.recording; checked <=> root.mod-win; toggled => { root.hotkey-picked(); } }
                     }
-                }
-                Row {
-                    label: Strings.hotkey-mods;
-                    CheckBox { text: "Ctrl"; enabled: !root.recording; checked <=> root.mod-ctrl; toggled => { root.hotkey-picked(); } }
-                    CheckBox { text: "Alt"; enabled: !root.recording; checked <=> root.mod-alt; toggled => { root.hotkey-picked(); } }
-                    CheckBox { text: "Shift"; enabled: !root.recording; checked <=> root.mod-shift; toggled => { root.hotkey-picked(); } }
-                    CheckBox { text: "Win"; enabled: !root.recording; checked <=> root.mod-win; toggled => { root.hotkey-picked(); } }
-                }
-                if root.hotkey-error != "": Note { text: root.hotkey-error; color: #ff6b6b; }
-                if root.hotkey-warn: Note { text: Strings.hotkey-leaks; color: #f7c948; }
-                SectionTitle { text: Strings.sec-test; }
-                Row {
-                    label: Strings.test-label;
-                    Button { text: Strings.test-button; clicked => { root.test-mute(); } }
+                    if root.hotkey-error != "": Note { text: root.hotkey-error; color: #ff6b6b; }
+                    if root.hotkey-warn: Note { text: Strings.hotkey-leaks; color: #f7c948; }
+                    SectionTitle { text: Strings.sec-test; }
+                    Row {
+                        label: Strings.test-label;
+                        Button { text: Strings.test-button; clicked => { root.test-mute(); } }
+                    }
                 }
             }
             if root.tab == 1: ScrollView {
@@ -406,6 +412,10 @@ export component MainWindow inherits Window {
                         label: Strings.autostart-label;
                         CheckBox { checked <=> root.gen-autostart; toggled => { root.gen-changed(); } }
                     }
+                    Row {
+                        label: Strings.version-label;
+                        Text { text: root.app-version; color: Palette.text-dim; vertical-alignment: center; }
+                    }
                     SectionTitle { text: Strings.sec-updates; }
                     Row {
                         label: root.upd-text;
@@ -423,13 +433,13 @@ export component MainWindow inherits Window {
                     Note { text: Strings.made-with-slint; color: Palette.text-dim; horizontal-alignment: center; }
                 }
             }
-            if root.core-info != "": Note {
-                x: 24px;
-                y: parent.height - self.height - 8px;
-                width: parent.width - 48px;
-                text: root.core-info;
-                color: #f7c948;
-            }
+          }
+          if root.core-info != "": VerticalLayout {
+              padding-left: 24px;
+              padding-right: 24px;
+              padding-bottom: 8px;
+              Note { text: root.core-info; color: #f7c948; }
+          }
         }
     }
 }

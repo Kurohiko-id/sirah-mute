@@ -142,6 +142,11 @@ pub(crate) fn os_build() -> String {
     String::from_utf16_lossy(&buf[..n])
 }
 
+/// Only GitHub URLs are ever handed to the shell.
+pub(crate) fn is_release_url(url: &str) -> bool {
+    url.starts_with("https://github.com/")
+}
+
 pub(crate) fn open_url(url: &str) {
     unsafe {
         ShellExecuteW(
@@ -512,8 +517,8 @@ impl State {
 
     fn on_update(&mut self, manual: bool) {
         match UPDATE.lock().unwrap_or_else(|e| e.into_inner()).take() {
-            // Only ever a GitHub URL; refuse anything else before handing it to the shell.
-            Some(r) if r.url.starts_with("https://github.com/") => {
+            // Refuse non-GitHub URLs before handing them to the shell.
+            Some(r) if is_release_url(&r.url) => {
                 let body = t(self.lang, Key::UpdateAvailable).replace("{ver}", &r.tag);
                 self.balloon(&body);
                 self.pending_balloon = Some(Pending::OpenUrl(r.url));
@@ -850,6 +855,15 @@ pub fn run() -> i32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn only_github_release_urls_open() {
+        assert!(is_release_url("https://github.com/a/b/releases/tag/v1"));
+        assert!(!is_release_url("http://github.com/a"));
+        assert!(!is_release_url("https://github.com.evil.com/a"));
+        assert!(!is_release_url("file:///c:/x.exe"));
+        assert!(!is_release_url(""));
+    }
 
     #[test]
     fn reload_reply_code_maps_hotkey_state() {

@@ -99,6 +99,7 @@ pub enum Key {
     LangLabel,
     LangAuto,
     AutostartLabel,
+    VersionLabel,
     SecUpdates,
     CheckUpdateBtn,
     UpdChecking,
@@ -116,7 +117,7 @@ pub enum Key {
 
 impl Key {
     #[cfg(test)]
-    pub const ALL: [Key; 87] = [
+    pub const ALL: [Key; 88] = [
         Key::Muted,
         Key::Unmuted,
         Key::MicDisconnected,
@@ -191,6 +192,7 @@ impl Key {
         Key::LangLabel,
         Key::LangAuto,
         Key::AutostartLabel,
+        Key::VersionLabel,
         Key::SecUpdates,
         Key::CheckUpdateBtn,
         Key::UpdChecking,
@@ -372,6 +374,8 @@ pub fn t(l: ResolvedLang, k: Key) -> &'static str {
         (SecUpdates, Id) => "Update & bantuan",
         (CheckUpdateBtn, En) => "Check for updates",
         (CheckUpdateBtn, Id) => "Cek update",
+        (VersionLabel, En) => "App version",
+        (VersionLabel, Id) => "Versi app",
         (UpdChecking, En) => "Checking...",
         (UpdChecking, Id) => "Lagi ngecek...",
         (UpdNewer, En) => "New version available: {tag}",

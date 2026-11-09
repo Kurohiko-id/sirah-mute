@@ -9,8 +9,9 @@ use windows::Win32::UI::Input::{
     GetRawInputData, HRAWINPUT, RAWINPUT, RAWINPUTDEVICE, RAWINPUTDEVICE_FLAGS, RAWINPUTHEADER,
     RID_INPUT, RIDEV_INPUTSINK, RIDEV_REMOVE, RIM_TYPEKEYBOARD, RegisterRawInputDevices,
 };
+use windows::Win32::System::Threading::GetCurrentProcessId;
 use windows::Win32::UI::WindowsAndMessaging::{
-    CreateWindowExW, DefWindowProcW, RegisterClassW, WINDOW_EX_STYLE, WM_INPUT, WNDCLASSW,
+    CreateWindowExW, DefWindowProcW, GetForegroundWindow, GetWindowThreadProcessId, RegisterClassW, WINDOW_EX_STYLE, WM_INPUT, WNDCLASSW,
     WS_OVERLAPPED,
 };
 use windows::core::w;
@@ -19,6 +20,23 @@ use windows::core::w;
 pub enum RecordEvent {
     Key { vk: u32, mods: u32 },
     Cancel,
+}
+
+/// Raw Input sink also sees keys typed in other apps; give up after this long.
+pub const RECORD_TIMEOUT_MS: u64 = 15_000;
+
+/// Recording is abandoned on timeout or when another app has the foreground.
+pub fn should_cancel(elapsed_ms: u64, foreground_is_ours: bool) -> bool {
+    elapsed_ms >= RECORD_TIMEOUT_MS || !foreground_is_ours
+}
+
+/// True when the foreground window belongs to this (settings) process.
+pub fn foreground_is_ours() -> bool {
+    unsafe {
+        let mut pid = 0u32;
+        GetWindowThreadProcessId(GetForegroundWindow(), Some(&mut pid));
+        pid == GetCurrentProcessId()
+    }
 }
 
 pub fn event_from_vk(vk: u32, mods: u32) -> RecordEvent {
@@ -200,5 +218,13 @@ mod tests {
             event_from_vk(0x7C, 2),
             RecordEvent::Key { vk: 0x7C, mods: 2 }
         );
+    }
+
+    #[test]
+    fn cancel_on_timeout_or_lost_focus() {
+        assert!(!should_cancel(0, true));
+        assert!(!should_cancel(RECORD_TIMEOUT_MS - 1, true));
+        assert!(should_cancel(RECORD_TIMEOUT_MS, true));
+        assert!(should_cancel(10, false));
     }
 }

@@ -6,7 +6,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
 use windows::core::PCWSTR;
 
 pub const SETTINGS_MUTEX: &str = r"Local\KuroMuteSettings";
-/// Slint window title; settings.slint's title is set from this in ui.rs.
+/// Slint window title; settings.slint hardcodes the same string (ui.rs tests assert equality).
 pub const WINDOW_TITLE: &str = "Kuro Mute Settings";
 
 /// Holds the mutex; `None` handle = CreateMutexW failed, we run unguarded rather than never open.

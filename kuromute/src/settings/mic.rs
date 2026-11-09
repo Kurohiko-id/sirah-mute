@@ -10,7 +10,7 @@ use crate::msg::{MSG_PAUSE_HOTKEY, MSG_TOGGLE};
 use slint::{ComponentHandle, ModelRc, SharedString, Timer, TimerMode, VecModel};
 use std::cell::RefCell;
 use std::rc::Rc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use windows::Win32::Foundation::HWND;
 use windows::Win32::System::Com::{COINIT_APARTMENTTHREADED, CoInitializeEx};
 use windows::Win32::System::Threading::GetCurrentProcessId;
@@ -217,10 +217,20 @@ pub fn setup(w: &MainWindow, state: &Rc<RefCell<State>>) -> Mic {
             }
         }
         w.set_recording(true);
+        let started = Instant::now();
         let (ww, st, rec, tm2) = (ww.clone(), st.clone(), rec.clone(), tm.clone());
         tm.start(TimerMode::Repeated, Duration::from_millis(30), move || {
-            let Some(ev) = rec.borrow_mut().as_mut().and_then(|r| r.poll()) else {
-                return;
+            let polled = rec.borrow_mut().as_mut().and_then(|r| r.poll());
+            let ev = match polled {
+                Some(ev) => ev,
+                None if record::should_cancel(
+                    started.elapsed().as_millis() as u64,
+                    record::foreground_is_ours(),
+                ) =>
+                {
+                    RecordEvent::Cancel
+                }
+                None => return,
             };
             tm2.stop();
             rec.borrow_mut().take(); // unregister Raw Input

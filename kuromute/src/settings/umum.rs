@@ -26,6 +26,7 @@ pub fn setup(w: &MainWindow, state: &Rc<RefCell<State>>, refreshers: Vec<Rc<dyn 
                 .map_or(0, |i| i as i32),
         );
         w.set_gen_autostart(s.cfg.autostart);
+        w.set_app_version(crate::app::VERSION.into());
     }
 
     let (ww, st) = (w.as_weak(), state.clone());
@@ -94,7 +95,12 @@ pub fn setup(w: &MainWindow, state: &Rc<RefCell<State>>, refreshers: Vec<Rc<dyn 
     let ww = w.as_weak();
     w.on_open_release_clicked(move || {
         if let Some(w) = ww.upgrade() {
-            crate::app::open_url(&w.get_upd_url());
+            let url = w.get_upd_url();
+            if crate::app::is_release_url(&url) {
+                crate::app::open_url(&url);
+            } else {
+                crate::log!("settings: refused release url {url}");
+            }
         }
     });
 
