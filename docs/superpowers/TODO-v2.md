@@ -75,6 +75,13 @@ Rencana:
 - [ ] Kalau nggak ada app lain yang buka stream di mic sumber, meter 0 → fitur diam (tulis di keterangan UI)
 - [ ] Ambang/sensitivitas: slider atau cukup konstanta, putuskan setelah tes harian
 
+## Bagian 2d: Timer durasi mute di popup ⏳
+
+Permintaan user (2026-11-10): popup nampilin udah berapa lama mute, tampil terus selama mute, reset tiap mute baru.
+- [ ] Popup: "Mic mute · 0:42" (m:ss, lewat sejam h:mm:ss). Render ulang bitmap popup 1x/detik selama mute dan popup kelihatan; timer mati waktu unmute
+- [ ] Tampil terus = opsi "Tetap tampil selama mute" yang udah ada
+- [ ] Mulai dihitung dari event mute (termasuk mute dari luar app); unmute lalu mute lagi = reset ke 0:00
+
 ## Bagian 3: Distribusi ⏳ (belum mulai)
 
 - [ ] Installer per-user (Inno Setup, AppId baru): matikan app lama dan watcher Super Lite, ambil alih Run key, shortcut Start Menu
