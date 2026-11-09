@@ -23,6 +23,7 @@ use windows::Win32::Graphics::DirectWrite::{
     DWRITE_FONT_WEIGHT_NORMAL, DWRITE_MEASURING_MODE_NATURAL, DWRITE_PARAGRAPH_ALIGNMENT_CENTER,
     DWRITE_TEXT_ALIGNMENT_CENTER, DWriteCreateFactory, IDWriteFactory, IDWriteTextFormat,
 };
+use windows::Win32::Graphics::Dwm::{DWMWA_CLOAK, DwmSetWindowAttribute};
 use windows::Win32::Graphics::Dxgi::Common::DXGI_FORMAT_B8G8R8A8_UNORM;
 use windows::Win32::Graphics::Gdi::{
     AC_SRC_ALPHA, AC_SRC_OVER, BI_RGB, BITMAPINFO, BITMAPINFOHEADER, BLENDFUNCTION,
@@ -33,10 +34,10 @@ use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::UI::WindowsAndMessaging::{
     BeginDeferWindowPos, CreateWindowExW, DefWindowProcW, DeferWindowPos, DestroyWindow,
     EndDeferWindowPos, HTTRANSPARENT, HWND_TOPMOST, KillTimer, LWA_ALPHA, MA_NOACTIVATE,
-    RegisterClassExW, SWP_HIDEWINDOW, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_SHOWWINDOW,
-    SetLayeredWindowAttributes, SetTimer, SetWindowPos, ULW_ALPHA, UpdateLayeredWindow,
-    WM_MOUSEACTIVATE, WM_NCHITTEST, WNDCLASSEXW, WS_EX_LAYERED, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW,
-    WS_EX_TOPMOST, WS_EX_TRANSPARENT, WS_POPUP,
+    RegisterClassExW, SET_WINDOW_POS_FLAGS, SWP_HIDEWINDOW, SWP_NOACTIVATE, SWP_NOMOVE,
+    SWP_NOREDRAW, SWP_NOSIZE, SWP_SHOWWINDOW, SetLayeredWindowAttributes, SetTimer, SetWindowPos,
+    ULW_ALPHA, UpdateLayeredWindow, WM_MOUSEACTIVATE, WM_NCHITTEST, WNDCLASSEXW, WS_EX_LAYERED,
+    WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_EX_TRANSPARENT, WS_POPUP,
 };
 use windows::core::{BOOL, PCWSTR, Result, w};
 
@@ -408,6 +409,9 @@ impl Indicators {
                     }
                 }
             }
+            // Shown (topmost) once here, cloaked; show/hide only toggles the cloak.
+            self.cloak_strips(true);
+            self.raise_strips(SWP_SHOWWINDOW);
         }
     }
 
@@ -449,16 +453,34 @@ impl Indicators {
         }
     }
 
+    /// Hot path: one cheap DWM cloak per strip, no show/z-order work (that was
+    /// ~10-30 ms for 12 strips). Topmost is re-asserted while hidden, off the mute path.
     fn set_strips(&self, visible: bool) {
+        self.cloak_strips(!visible);
+        if !visible {
+            self.raise_strips(SWP_NOREDRAW);
+        }
+    }
+
+    fn cloak_strips(&self, cloak: bool) {
+        let v = BOOL(cloak as i32);
+        for &h in &self.strips {
+            unsafe {
+                let _ = DwmSetWindowAttribute(
+                    h,
+                    DWMWA_CLOAK,
+                    &v as *const BOOL as *const _,
+                    size_of::<BOOL>() as u32,
+                );
+            }
+        }
+    }
+
+    fn raise_strips(&self, extra: SET_WINDOW_POS_FLAGS) {
+        let flags = SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | extra;
         if self.strips.is_empty() {
             return;
         }
-        let vis = if visible {
-            SWP_SHOWWINDOW
-        } else {
-            SWP_HIDEWINDOW
-        };
-        let flags = SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | vis;
         unsafe {
             let Ok(mut hdwp) = BeginDeferWindowPos(self.strips.len() as i32) else {
                 return;
