@@ -1,7 +1,7 @@
 use crate::config::{self, Config};
 use std::path::Path;
 
-#[derive(PartialEq, Debug)]
+#[derive(Clone, Copy, PartialEq, Debug)]
 pub enum CoreReply {
     Ok,
     HotkeyFailed,
@@ -22,6 +22,22 @@ pub fn map_reply(code: Option<isize>, timed_out: bool) -> CoreReply {
         (Some(0), false) => CoreReply::Ok,
         (Some(1), false) => CoreReply::HotkeyFailed,
         _ => CoreReply::Unknown,
+    }
+}
+
+#[derive(PartialEq, Debug)]
+pub enum StatusKey {
+    None,
+    CoreNotRunning,
+    HotkeyFailed,
+}
+
+/// What the window shows for a core reply; a timeout (`Unknown`) is not an error.
+pub fn status_key(r: CoreReply) -> StatusKey {
+    match r {
+        CoreReply::NotRunning => StatusKey::CoreNotRunning,
+        CoreReply::HotkeyFailed => StatusKey::HotkeyFailed,
+        CoreReply::Ok | CoreReply::Unknown => StatusKey::None,
     }
 }
 
@@ -54,6 +70,13 @@ mod tests {
     fn blocked_when_startup_load_failed() {
         let out = save_and_reload(false, Path::new("unused.json"), &Config::default(), || None);
         assert_eq!(out, SaveOutcome::Blocked);
+    }
+
+    #[test]
+    fn not_running_is_info_not_error() {
+        assert_eq!(status_key(CoreReply::NotRunning), StatusKey::CoreNotRunning);
+        assert_eq!(status_key(CoreReply::Unknown), StatusKey::None);
+        assert_eq!(status_key(CoreReply::HotkeyFailed), StatusKey::HotkeyFailed);
     }
 
     #[test]

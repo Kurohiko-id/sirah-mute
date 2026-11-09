@@ -111,11 +111,12 @@ pub enum Key {
     BugLabel,
     BugBtn,
     MadeWithSlint,
+    CoreNotRunning,
 }
 
 impl Key {
     #[cfg(test)]
-    pub const ALL: [Key; 86] = [
+    pub const ALL: [Key; 87] = [
         Key::Muted,
         Key::Unmuted,
         Key::MicDisconnected,
@@ -202,6 +203,7 @@ impl Key {
         Key::BugLabel,
         Key::BugBtn,
         Key::MadeWithSlint,
+        Key::CoreNotRunning,
     ];
 }
 
@@ -390,6 +392,8 @@ pub fn t(l: ResolvedLang, k: Key) -> &'static str {
         (BugBtn, Id) => "Report bug",
         (MadeWithSlint, En) => "Made with Slint",
         (MadeWithSlint, Id) => "Dibuat dengan Slint",
+        (CoreNotRunning, En) => "Kuro Mute is not running; changes apply on its next start",
+        (CoreNotRunning, Id) => "Kuro Mute tidak jalan; perubahan dipakai saat start berikutnya",
         (AppName, _) => "Kuro Mute & Force Mic",
     }
 }

@@ -152,6 +152,7 @@ export component MainWindow inherits Window {
     in property <string> hotkey-error;
     in property <bool> hotkey-warn;
     in property <string> save-error;
+    in property <string> core-info;
     callback test-mute();
     // Penanda tab (filled by settings::penanda)
     in-out property <bool> pen-popup-enabled;
@@ -421,6 +422,13 @@ export component MainWindow inherits Window {
                     }
                     Note { text: Strings.made-with-slint; color: Palette.text-dim; horizontal-alignment: center; }
                 }
+            }
+            if root.core-info != "": Note {
+                x: 24px;
+                y: parent.height - self.height - 8px;
+                width: parent.width - 48px;
+                text: root.core-info;
+                color: #f7c948;
             }
         }
     }

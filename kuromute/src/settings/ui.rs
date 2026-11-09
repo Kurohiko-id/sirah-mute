@@ -1,4 +1,4 @@
-use super::save::{self, CoreReply, SaveOutcome};
+use super::save::{self, CoreReply, SaveOutcome, StatusKey};
 use crate::config::{self, Config, LoadOutcome};
 use crate::i18n::{self, Key, ResolvedLang};
 use crate::msg::{MSG_RELOAD, WINDOW_CLASS};
@@ -153,22 +153,57 @@ pub fn commit(state: &RefCell<State>, w: &MainWindow) -> SaveOutcome {
         }
         SaveOutcome::Saved(reply) => {
             w.set_save_error("".into());
-            match reply {
-                CoreReply::Ok => w.set_hotkey_error("".into()),
-                CoreReply::HotkeyFailed => {
-                    let key = crate::hotkey::display(&cfg.hotkey);
-                    w.set_hotkey_error(
-                        i18n::t(lang, Key::HotkeyInUse)
-                            .replace("{key}", &key)
-                            .into(),
-                    );
-                }
-                // NotRunning info line: Task 10.
-                CoreReply::Unknown | CoreReply::NotRunning => {}
+            if *reply == CoreReply::Ok {
+                w.set_hotkey_error("".into());
+            }
+            let key = save::status_key(*reply);
+            // the info line clears on the next save that is not "core not running"
+            let info = match key {
+                StatusKey::CoreNotRunning => i18n::t(lang, Key::CoreNotRunning),
+                _ => "",
+            };
+            w.set_core_info(info.into());
+            if key == StatusKey::HotkeyFailed {
+                let key = crate::hotkey::display(&cfg.hotkey);
+                w.set_hotkey_error(
+                    i18n::t(lang, Key::HotkeyInUse)
+                        .replace("{key}", &key)
+                        .into(),
+                );
             }
         }
     }
     out
+}
+
+/// Spec §4: open centered on the monitor under the cursor. Best effort; skipped on any failure.
+fn center_on_cursor_monitor(w: &MainWindow) {
+    use windows::Win32::Foundation::POINT;
+    use windows::Win32::Graphics::Gdi::{
+        GetMonitorInfoW, MONITOR_DEFAULTTONEAREST, MONITORINFO, MonitorFromPoint,
+    };
+    use windows::Win32::UI::WindowsAndMessaging::GetCursorPos;
+    if w.show().is_err() {
+        return;
+    }
+    let mut p = POINT::default();
+    if unsafe { GetCursorPos(&mut p) }.is_err() {
+        return;
+    }
+    let mut mi = MONITORINFO {
+        cbSize: size_of::<MONITORINFO>() as u32,
+        ..Default::default()
+    };
+    let hm = unsafe { MonitorFromPoint(p, MONITOR_DEFAULTTONEAREST) };
+    if !unsafe { GetMonitorInfoW(hm, &mut mi) }.as_bool() {
+        return;
+    }
+    let win = w.window();
+    let size = win.size();
+    let r = mi.rcWork;
+    let x = r.left + ((r.right - r.left) - size.width as i32) / 2;
+    let y = r.top + ((r.bottom - r.top) - size.height as i32) / 2;
+    win.set_position(slint::PhysicalPosition::new(x, y));
 }
 
 pub fn run() -> i32 {
@@ -193,6 +228,7 @@ pub fn run() -> i32 {
         2 => dev(),
         _ => {}
     });
+    center_on_cursor_monitor(&w);
     let res = w.run();
     flush_pen(); // a debounced change may still be waiting
     mic.finish(); // resume the core hotkey if the window closed mid-recording
