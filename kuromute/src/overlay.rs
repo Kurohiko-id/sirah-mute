@@ -364,6 +364,9 @@ pub struct Indicators {
     popups: Vec<Popup>,
     strips: Vec<HWND>,
     persist: bool,
+    /// DWM cloak failed: strips are shown/hidden the old (slower) SWP way.
+    fallback: bool,
+    strips_visible: bool,
 }
 
 impl Indicators {
@@ -372,6 +375,8 @@ impl Indicators {
             popups: Vec::new(),
             strips: Vec::new(),
             persist: false,
+            fallback: false,
+            strips_visible: false,
         }
     }
 
@@ -410,8 +415,13 @@ impl Indicators {
                 }
             }
             // Shown (topmost) once here, cloaked; show/hide only toggles the cloak.
-            self.cloak_strips(true);
-            self.raise_strips(SWP_SHOWWINDOW);
+            self.fallback = !self.cloak_strips(true);
+            if self.fallback {
+                crate::log::write("overlay: DWM cloak failed, using show/hide fallback");
+                self.cloak_strips(false);
+            } else {
+                self.raise_strips(SWP_SHOWWINDOW);
+            }
         }
     }
 
@@ -444,7 +454,15 @@ impl Indicators {
         }
     }
 
+    /// Re-asserts topmost for visible strips; call after the latency-critical show.
+    pub fn raise(&self) {
+        if self.strips_visible {
+            self.raise_strips(SWP_NOREDRAW);
+        }
+    }
+
     pub fn destroy(&mut self) {
+        self.strips_visible = false;
         self.popups.clear();
         for h in self.strips.drain(..) {
             unsafe {
@@ -455,25 +473,40 @@ impl Indicators {
 
     /// Hot path: one cheap DWM cloak per strip, no show/z-order work (that was
     /// ~10-30 ms for 12 strips). Topmost is re-asserted while hidden, off the mute path.
-    fn set_strips(&self, visible: bool) {
-        self.cloak_strips(!visible);
-        if !visible {
+    fn set_strips(&mut self, visible: bool) {
+        self.strips_visible = visible && !self.strips.is_empty();
+        if !self.fallback && !self.cloak_strips(!visible) {
+            crate::log::write("overlay: DWM cloak failed, using show/hide fallback");
+            self.fallback = true;
+            self.cloak_strips(false);
+        }
+        if self.fallback {
+            self.raise_strips(if visible {
+                SWP_SHOWWINDOW
+            } else {
+                SWP_HIDEWINDOW
+            });
+        } else if !visible {
             self.raise_strips(SWP_NOREDRAW);
         }
     }
 
-    fn cloak_strips(&self, cloak: bool) {
+    /// True only if every strip's cloak state was set.
+    fn cloak_strips(&self, cloak: bool) -> bool {
         let v = BOOL(cloak as i32);
+        let mut ok = true;
         for &h in &self.strips {
-            unsafe {
-                let _ = DwmSetWindowAttribute(
+            ok &= unsafe {
+                DwmSetWindowAttribute(
                     h,
                     DWMWA_CLOAK,
                     &v as *const BOOL as *const _,
                     size_of::<BOOL>() as u32,
-                );
+                )
             }
+            .is_ok();
         }
+        ok
     }
 
     fn raise_strips(&self, extra: SET_WINDOW_POS_FLAGS) {
@@ -488,7 +521,11 @@ impl Indicators {
             for &h in &self.strips {
                 match DeferWindowPos(hdwp, h, Some(HWND_TOPMOST), 0, 0, 0, 0, flags) {
                     Ok(n) => hdwp = n,
-                    Err(_) => return, // batch already freed by the system
+                    Err(e) => {
+                        // batch already freed by the system
+                        crate::log::write(format!("overlay: DeferWindowPos failed: {e}"));
+                        return;
+                    }
                 }
             }
             let _ = EndDeferWindowPos(hdwp);

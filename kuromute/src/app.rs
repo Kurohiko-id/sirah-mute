@@ -438,6 +438,9 @@ impl State {
         self.last_muted = Some(muted);
         self.ind.show(self.hwnd, muted);
         self.log_latency();
+        if muted {
+            self.ind.raise(); // off the measured path; lands above late topmost windows
+        }
         self.update_tray();
         if self.cfg.sound_enabled {
             sound::play(muted);
