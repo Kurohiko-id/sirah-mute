@@ -82,6 +82,13 @@ Permintaan user (2026-11-10): popup nampilin udah berapa lama mute, tampil terus
 - [ ] Tampil terus = opsi "Tetap tampil selama mute" yang udah ada
 - [ ] Mulai dihitung dari event mute (termasuk mute dari luar app); unmute lalu mute lagi = reset ke 0:00
 
+## Bagian 2e: Support dev di tab Umum ⏳
+
+- [ ] Bagian "Dukung developer" di tab Umum, 2 tombol lewat `app::open_url` (sama kayak Report Bug):
+  - Saweria: https://saweria.co/Kurohiko
+  - Top Up Games: https://kurohikotopup.com
+- [ ] Teks EN/ID
+
 ## Bagian 3: Distribusi ⏳ (belum mulai)
 
 - [ ] Installer per-user (Inno Setup, AppId baru): matikan app lama dan watcher Super Lite, ambil alih Run key, shortcut Start Menu
