@@ -2,6 +2,7 @@
 #![allow(dead_code)]
 
 pub mod model;
+pub mod record;
 pub mod save;
 pub mod single;
 pub mod ui;
