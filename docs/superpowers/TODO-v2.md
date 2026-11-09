@@ -1,7 +1,7 @@
 # Kuro Mute v2 (Rust): status & to-do
 
 Spec: [specs/2026-11-09-rust-rewrite-design.md](specs/2026-11-09-rust-rewrite-design.md)
-Branch: `v2-rust` · Crate: `kuromute/`
+Branch: `main` (bagian 1 udah di-merge) · Crate: `kuromute/`
 Terakhir di-update: 2026-11-09
 
 ## Bagian 1: Core tray ✅ (selesai, dipakai harian)
@@ -37,7 +37,7 @@ Hasil tes langsung di PC user (2026-11-09):
 | GDI/USER nggak bocor | ✅ |
 
 - [ ] **Tes di game** (borderless dan fullscreen): cek hotkey nggak bikin stutter dan border kelihatan. Nunggu user.
-- [ ] Merge `v2-rust` ke `main`
+- [x] Merge `v2-rust` ke `main` (2026-11-09)
 
 ## Bagian 2: Jendela settings ⏳ (belum mulai, wajib sebelum rilis)
 
