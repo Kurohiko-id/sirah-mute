@@ -44,6 +44,7 @@ Hasil tes langsung di PC user (2026-11-09):
 - [x] Brainstorm detail → desain: [specs/2026-11-09-v2-settings-design.md](specs/2026-11-09-v2-settings-design.md)
 - [x] Mockup klik-able disetujui user (2026-11-09): https://claude.ai/code/artifact/05e262d6-77f3-43e4-a208-b3d6f618b5c9
 - [x] Tulis plan: [plans/2026-11-09-v2-settings.md](plans/2026-11-09-v2-settings.md) (11 task, belum dieksekusi)
+- [x] Spike Raw Input (2026-11-09): F13 dari keyboard dan mouse masuk (`vk=0x7C`), **tapi cuma kalau core lagi nggak daftarin F13** (RegisterHotKey nelen tombolnya), jadi jeda hotkey saat rekam wajib. F24 tidak dites (user nggak punya). Play/Pause nggak masuk lewat koleksi keyboard (jalur consumer HID), jadi tombol media dipilih lewat dropdown, bukan Rekam.
 - [ ] Mode `--settings` pakai Slint, layout B: sidebar Mic / Penanda / Device / Umum, tema gelap
 - [ ] Mic: pilih device, rekam tombol, dropdown F13–F24 (`hotkey::SELECTABLE_KEYS`), peringatan kalau tombol bisa bocor ke game, tes mute
 - [ ] Penanda: popup (posisi, skala, tetap tampil), border (tebal 1–30), pilih monitor, bunyi
