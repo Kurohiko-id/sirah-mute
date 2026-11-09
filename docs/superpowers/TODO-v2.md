@@ -2,7 +2,7 @@
 
 Spec: [specs/2026-11-09-rust-rewrite-design.md](specs/2026-11-09-rust-rewrite-design.md)
 Branch: `main` (bagian 1 udah di-merge) · Crate: `kuromute/`
-Terakhir di-update: 2026-11-09
+Terakhir di-update: 2026-11-10
 
 ## Bagian 1: Core tray ✅ (selesai, dipakai harian)
 
@@ -54,42 +54,44 @@ Hasil tes langsung di PC user (2026-11-09):
 - [x] Ukur (2026-11-09, `tools/measure.ps1`, exe release 14 MB): core RAM 2,44 MB, latency p50 4 ms / p95 12 ms. Tetap satu exe.
 - [ ] Polish ditunda: error merah tetap bahasa lama sampai simpan berikutnya; tombol media cuma lewat dropdown (Rekam tidak tangkap consumer HID); ukuran exe bisa dikecilkan (profil release lto/strip).
 
-## Bagian 2b: Border glow + pulse ⏳ (sebelum merge `v2-settings`)
+## Bagian 2b: Border glow + pulse ✅ (sebelum merge `v2-settings`)
 
 Rencana kerja 2b–2e: [plans/2026-11-10-v2-indicators-extras.md](plans/2026-11-10-v2-indicators-extras.md) (7 task)
 
 - [x] Sample gaya disetujui user (2026-11-10): https://claude.ai/code/artifact/c176bc3d-1397-44c1-8ed1-a7b97ac54045 (pilih "Glow + pulse awal")
 - [x] Keputusan: jadi pilihan Gaya di tab Penanda (Solid / Glow), default Glow
-- [ ] Glow: strip dilebarin ke dalam, bitmap gradasi alpha per-pixel via `UpdateLayeredWindow` (renderer popup), dirender sekali per `rebuild`
-- [ ] Pulse: 3 kedip (~1,6 dtk) waktu baru mute, cuma ganti alpha global lewat `UpdateLayeredWindow`, timer mati setelahnya. Jalur show tetap cuma buka cloak (latency nggak berubah)
-- [ ] Config `border_style` + default untuk config lama, dropdown di Penanda, i18n EN/ID
-- [ ] Ukur ulang latency dan RAM
+- [x] Glow: strip dilebarin ke dalam, bitmap gradasi alpha per-pixel via `UpdateLayeredWindow` (renderer popup), dirender sekali per `rebuild`
+- [x] Pulse: 3 kedip (~1,6 dtk) waktu baru mute, cuma ganti alpha global lewat `UpdateLayeredWindow`, timer mati setelahnya. Jalur show tetap cuma buka cloak (latency nggak berubah)
+- [x] Config `border_style` + default untuk config lama, dropdown di Penanda, i18n EN/ID
+- [x] Ukur ulang latency dan RAM (2026-11-10, exe release 14 MB, border Glow): core RAM 3,49 MB (baseline 2,44 MB), latency run baru p50 2 ms / p95 3 ms, n=20 (baseline p50 4 ms / p95 12 ms; semua sampel log p50 2 / p95 9, n=280). GDI 14 / USER 21 sebelum dan sesudah 20 toggle, nggak bocor.
 
-## Bagian 2c: Peringatan "ngomong pas lagi mute" ⏳
+Tes manual user: belum
+
+## Bagian 2c: Peringatan "ngomong pas lagi mute" ✅
 
 Spike 2026-11-10 (`examples/meter_spike.rs`):
 - Mute endpoint mic fisik (PD400X) → meter dan sample capture dua-duanya 0,000. Jadi kalau yang di-mute mic fisik, fitur ini nggak bisa.
 - Setup user: yang di-mute **Wave Link MicrophoneFX** (virtual), PD400X tetap hidup. Meter PD400X (`IAudioMeterInformation`, tanpa buka stream sendiri, ngandelin stream Wave Link) tetap kebaca: diam 0,000–0,005, ngomong 0,01–0,13. ✅
 
 Rencana:
-- [ ] Setting di tab Mic: nyalain fitur + pilih "mic sumber" (mic fisik yang dibaca meternya), default mati
-- [ ] Selama mute: poll `GetPeakValue` ±100 ms; di atas ambang (awal ±0,015) selama ≥300 ms → pulse border + popup lagi, opsional beep; cooldown ±10 dtk. Timer mati waktu unmute
-- [ ] Kalau nggak ada app lain yang buka stream di mic sumber, meter 0 → fitur diam (tulis di keterangan UI)
-- [ ] Ambang/sensitivitas: slider atau cukup konstanta, putuskan setelah tes harian
+- [x] Setting di tab Mic: nyalain fitur + pilih "mic sumber" (mic fisik yang dibaca meternya), default mati
+- [x] Selama mute: poll `GetPeakValue` ±100 ms; di atas ambang (awal ±0,015) selama ≥300 ms → pulse border + popup lagi, opsional beep; cooldown ±10 dtk. Timer mati waktu unmute
+- [x] Kalau nggak ada app lain yang buka stream di mic sumber, meter 0 → fitur diam (tulis di keterangan UI)
+- [x] Ambang/sensitivitas: konstanta 0,015, ditinjau lagi setelah dipakai harian
 
-## Bagian 2d: Timer durasi mute di popup ⏳
+## Bagian 2d: Timer durasi mute di popup ✅
 
 Permintaan user (2026-11-10): popup nampilin udah berapa lama mute, tampil terus selama mute, reset tiap mute baru.
-- [ ] Popup: "Mic mute · 0:42" (m:ss, lewat sejam h:mm:ss). Render ulang bitmap popup 1x/detik selama mute dan popup kelihatan; timer mati waktu unmute
-- [ ] Tampil terus = opsi "Tetap tampil selama mute" yang udah ada
-- [ ] Mulai dihitung dari event mute (termasuk mute dari luar app); unmute lalu mute lagi = reset ke 0:00
+- [x] Popup: "Mic mute · 0:42" (m:ss, lewat sejam h:mm:ss). Render ulang bitmap popup 1x/detik selama mute dan popup kelihatan; timer mati waktu unmute
+- [x] Tampil terus = opsi "Tetap tampil selama mute" yang udah ada
+- [x] Mulai dihitung dari event mute (termasuk mute dari luar app); unmute lalu mute lagi = reset ke 0:00
 
-## Bagian 2e: Support dev di tab Umum ⏳
+## Bagian 2e: Support dev di tab Umum ✅
 
-- [ ] Bagian "Dukung developer" di tab Umum, 2 tombol lewat `app::open_url` (sama kayak Report Bug):
+- [x] Bagian "Dukung developer" di tab Umum, 2 tombol lewat `app::open_url` (sama kayak Report Bug):
   - Saweria: https://saweria.co/Kurohiko
   - Top Up Games: https://kurohikotopup.com
-- [ ] Teks EN/ID
+- [x] Teks EN/ID
 
 ## Bagian 3: Distribusi ⏳ (belum mulai)
 
