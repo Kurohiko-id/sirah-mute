@@ -199,6 +199,32 @@ pub fn commit(state: &RefCell<State>, w: &MainWindow) -> SaveOutcome {
     out
 }
 
+/// Window size in logical px; must match `MainWindow` in ui/settings.slint.
+const WINDOW_SIZE: (f64, f64) = (760.0, 520.0);
+
+/// Slint hands winit its fixed min/max size in physical pixels for the scale at open time and never
+/// updates them, so after a DPI change (e.g. a 125% and a 100% monitor) Windows clamps the window to
+/// the old pixel size; dragging across the edge can then flip DPI back and forth and the window
+/// ends up oversized. Re-pin the limits in logical pixels, which winit converts at the current scale.
+fn keep_size_across_dpi(w: &MainWindow) {
+    use slint::winit_030::{EventResult, WinitWindowAccessor, winit};
+    let pin = |win: &slint::Window| {
+        win.with_winit_window(|ww| {
+            let size = winit::dpi::LogicalSize::new(WINDOW_SIZE.0, WINDOW_SIZE.1);
+            ww.set_min_inner_size(Some(size));
+            ww.set_max_inner_size(Some(size));
+        });
+    };
+    let mut pinned = false;
+    w.window().on_winit_window_event(move |win, ev| {
+        if !pinned || matches!(ev, winit::event::WindowEvent::ScaleFactorChanged { .. }) {
+            pinned = true;
+            pin(win);
+        }
+        EventResult::Propagate
+    });
+}
+
 /// Spec §4: open centered on the monitor under the cursor. Best effort; skipped on any failure.
 fn center_on_cursor_monitor(w: &MainWindow) {
     use windows::Win32::Foundation::POINT;
@@ -256,6 +282,7 @@ pub fn run() -> i32 {
         _ => {}
     });
     center_on_cursor_monitor(&w);
+    keep_size_across_dpi(&w);
     let res = w.run();
     flush_pen(); // a debounced change may still be waiting
     mic.finish(); // resume the core hotkey if the window closed mid-recording
@@ -268,6 +295,18 @@ pub fn run() -> i32 {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn window_size_matches_slint() {
+        let src = include_str!("../../ui/settings.slint");
+        let (w, h) = super::WINDOW_SIZE;
+        for key in ["min-width", "max-width"] {
+            assert!(src.contains(&format!("{key}: {w}px;")), "{key}");
+        }
+        for key in ["min-height", "max-height"] {
+            assert!(src.contains(&format!("{key}: {h}px;")), "{key}");
+        }
+    }
+
     #[test]
     fn slint_title_matches_single_window_title() {
         let src = include_str!("../../ui/settings.slint");
