@@ -110,13 +110,14 @@ Tes manual user: belum
 
 Tes manual user: belum (cek ikon mic dicoret di Pill)
 
-## Bagian 3: Distribusi 🔧 (2026-11-10: installer + CI siap, rilis belum)
+## Bagian 3: Distribusi ✅ (2026-11-10: draft v2.0.0 dibuat CI)
 
 - [x] Installer per-user `installer/sirah-mute.iss` (Inno Setup, AppId baru `B131B4B2-…`, ke `%LOCALAPPDATA%\Programs\SirahMute`): matikan Sirah Mute lama, `Kuro MuteMic.exe`, `Kuro MuteMic Lite.exe`, watcher Super Lite (PID dari `%TEMP%\KuroForceAudio.pid`, difilter `powershell.exe`), shortcut Start Menu (+ Settings), saran uninstall v1. Autostart diurus app sendiri; uninstall hapus Run `SirahMute`, settings di `%APPDATA%\SirahMute` dibiarkan. Compile lokal OK (6,7 MB)
 - [x] Zip portable (isi `sirahmute.exe`)
 - [x] GitHub Actions `.github/workflows/release.yml`: push tag `v*` → cek tag = versi Cargo, test, build, ISCC (choco), zip, **draft** release
-- [ ] Tes installer manual user (install di atas live install, uninstall, install ulang)
-- [ ] Push tag `v2.0.0`, cek draft, publish; lalu hapus kalimat "lagi disiapin" di README EN/ID
+- [x] Tes installer manual user: timpa live install, F13 aman, uninstall bersih (dicek), halaman Finish pakai tombol besar Support/Top Up + panel kiri Sirah
+- [x] Tag `v2.0.0` di-push, CI hijau (5 mnt), draft berisi installer + zip, notes EN/ID; README diupdate
+- [ ] User klik **Publish** di draft, lalu post promo `assets/promo/`
 - [x] Gambar promo 1:1 `assets/promo/` (3 slide EN/ID); post setelah rilis ada
 
 ## Nanti (setelah inti stabil)
