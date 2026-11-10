@@ -39,6 +39,7 @@ export global Strings {
     in property <string> popup-position;
     in property <string> popup-scale;
     in property <string> popup-persist;
+    in property <[string]> popup-styles;
     in property <string> sec-border;
     in property <string> border-enabled;
     in property <string> border-thickness;
@@ -176,6 +177,7 @@ export component MainWindow inherits Window {
     in-out property <int> pen-position-index: -1;
     in-out property <float> pen-scale: 1.0;
     in-out property <bool> pen-persist;
+    in-out property <int> pen-popup-style-index: -1;
     in-out property <bool> pen-border-enabled;
     in-out property <float> pen-thickness: 6;
     in-out property <int> pen-border-style-index: -1;
@@ -330,6 +332,15 @@ export component MainWindow inherits Window {
                             width: 180px;
                             model: Strings.positions;
                             current-index <=> root.pen-position-index;
+                            selected => { root.pen-changed(); }
+                        }
+                    }
+                    if root.pen-popup-enabled: Row {
+                        label: Strings.border-style;
+                        ComboBox {
+                            width: 180px;
+                            model: Strings.popup-styles;
+                            current-index <=> root.pen-popup-style-index;
                             selected => { root.pen-changed(); }
                         }
                     }

@@ -77,6 +77,7 @@ pub fn diff(o: &Config, n: &Config) -> Changes {
             || o.popup_position != n.popup_position
             || o.popup_scale != n.popup_scale
             || o.popup_persist_while_muted != n.popup_persist_while_muted
+            || o.popup_style != n.popup_style
             || o.border_enabled != n.border_enabled
             || o.border_thickness != n.border_thickness
             || o.border_style != n.border_style

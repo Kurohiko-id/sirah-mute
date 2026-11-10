@@ -1,7 +1,7 @@
 //! Penanda tab glue: popup, border, monitors, sound.
 use super::model::{Debouncer, retain_known};
 use super::ui::{MainWindow, MonitorItem, State, commit};
-use crate::config::{BorderStyle, Position};
+use crate::config::{BorderStyle, PopupStyle, Position};
 use crate::i18n::{self, Key};
 use crate::monitors;
 use slint::{ComponentHandle, ModelRc, Timer, TimerMode, VecModel};
@@ -21,6 +21,7 @@ const POSITIONS: [Position; 6] = [
 ];
 
 const STYLES: [BorderStyle; 2] = [BorderStyle::Solid, BorderStyle::Glow];
+const POPUP_STYLES: [PopupStyle; 2] = [PopupStyle::Card, PopupStyle::Pill];
 
 /// Saves once, 300 ms after the last `poke`.
 struct Delayed {
@@ -104,6 +105,12 @@ fn show(w: &MainWindow, st: &State) {
     );
     w.set_pen_scale(c.popup_scale);
     w.set_pen_persist(c.popup_persist_while_muted);
+    w.set_pen_popup_style_index(
+        POPUP_STYLES
+            .iter()
+            .position(|s| *s == c.popup_style)
+            .map_or(-1, |i| i as i32),
+    );
     w.set_pen_border_enabled(c.border_enabled);
     w.set_pen_thickness(c.border_thickness as f32);
     w.set_pen_border_style_index(
@@ -155,6 +162,9 @@ pub fn setup(w: &MainWindow, state: &Rc<RefCell<State>>) -> (Action, Action) {
                 c.popup_position = *p;
             }
             c.popup_persist_while_muted = w.get_pen_persist();
+            if let Some(s) = POPUP_STYLES.get(w.get_pen_popup_style_index() as usize) {
+                c.popup_style = *s;
+            }
             c.border_enabled = w.get_pen_border_enabled();
             if let Some(s) = STYLES.get(w.get_pen_border_style_index() as usize) {
                 c.border_style = *s;

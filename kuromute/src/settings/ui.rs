@@ -66,6 +66,12 @@ pub fn apply_lang(w: &MainWindow, lang: ResolvedLang) {
     s.set_popup_position(i18n::t(lang, Key::PopupPosition).into());
     s.set_popup_scale(i18n::t(lang, Key::PopupScale).into());
     s.set_popup_persist(i18n::t(lang, Key::PopupPersist).into());
+    s.set_popup_styles(super::mic::model(
+        [Key::PopupCard, Key::PopupPill]
+            .iter()
+            .map(|&k| i18n::t(lang, k).to_string())
+            .collect(),
+    ));
     s.set_sec_border(i18n::t(lang, Key::SecBorder).into());
     s.set_border_enabled(i18n::t(lang, Key::BorderEnabled).into());
     s.set_border_thickness(i18n::t(lang, Key::BorderThickness).into());
@@ -237,7 +243,11 @@ pub fn run() -> i32 {
     let (pen, flush_pen) = super::penanda::setup(&w, &state);
     let dev = super::device::setup(&w, &state, mic.sink);
     let refresh_mic = mic.refresh.clone();
-    super::umum::setup(&w, &state, vec![mic.refresh.clone(), pen.clone(), dev.clone()]);
+    super::umum::setup(
+        &w,
+        &state,
+        vec![mic.refresh.clone(), pen.clone(), dev.clone()],
+    );
     // Spec §3: re-read devices/monitors whenever a tab that lists them opens.
     w.on_tab_opened(move |t| match t {
         0 => refresh_mic(),

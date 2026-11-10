@@ -1,7 +1,7 @@
 //! Layered overlay windows: per-monitor mute popup (Direct2D-rendered, per-pixel
 //! alpha) and red border strips. Windows never take focus or mouse input.
 
-use crate::config::{BorderStyle, Config};
+use crate::config::{BorderStyle, Config, PopupStyle, Position};
 use crate::geometry::{Rect, border_strips, popup_rect};
 use crate::i18n::{Key, ResolvedLang, t};
 use crate::monitors::Monitor;
@@ -17,12 +17,14 @@ use windows::Win32::Graphics::Direct2D::{
     D2D1_DRAW_TEXT_OPTIONS_NONE, D2D1_FACTORY_TYPE_SINGLE_THREADED, D2D1_FEATURE_LEVEL_DEFAULT,
     D2D1_RENDER_TARGET_PROPERTIES, D2D1_RENDER_TARGET_TYPE_SOFTWARE, D2D1_RENDER_TARGET_USAGE_NONE,
     D2D1_ROUNDED_RECT, D2D1_TEXT_ANTIALIAS_MODE_GRAYSCALE, D2D1CreateFactory, ID2D1DCRenderTarget,
-    ID2D1Factory,
+    ID2D1Factory, ID2D1SolidColorBrush,
 };
 use windows::Win32::Graphics::DirectWrite::{
     DWRITE_FACTORY_TYPE_SHARED, DWRITE_FONT_STRETCH_NORMAL, DWRITE_FONT_STYLE_NORMAL,
-    DWRITE_FONT_WEIGHT_NORMAL, DWRITE_MEASURING_MODE_NATURAL, DWRITE_PARAGRAPH_ALIGNMENT_CENTER,
-    DWRITE_TEXT_ALIGNMENT_CENTER, DWriteCreateFactory, IDWriteFactory, IDWriteTextFormat,
+    DWRITE_FONT_WEIGHT, DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_WEIGHT_SEMI_BOLD,
+    DWRITE_MEASURING_MODE_NATURAL, DWRITE_PARAGRAPH_ALIGNMENT_CENTER, DWRITE_TEXT_ALIGNMENT_CENTER,
+    DWRITE_TEXT_ALIGNMENT_LEADING, DWRITE_TEXT_METRICS, DWriteCreateFactory, IDWriteFactory,
+    IDWriteTextFormat,
 };
 use windows::Win32::Graphics::Dwm::{DWMWA_CLOAK, DwmSetWindowAttribute};
 use windows::Win32::Graphics::Dxgi::Common::DXGI_FORMAT_B8G8R8A8_UNORM;
@@ -56,6 +58,9 @@ const BORDER_COLOR: COLORREF = COLORREF(0x004D_48E5); // #E5484D as 0x00BBGGRR
 const BORDER_RGB: u32 = 0xE5484D;
 const GLYPH_MUTED: &str = "\u{E74F}"; // MicOff (OverlayForm.cs:88)
 const GLYPH_UNMUTED: &str = "\u{E720}"; // Microphone
+const GLYPH_MIC_OFF: &str = "\u{EC54}"; // MicOff (pill style)
+const PILL_MUTED: &str = "Mic mute";
+const PILL_UNMUTED: &str = "Mic on";
 
 const fn rgb(c: u32, a: f32) -> D2D1_COLOR_F {
     D2D1_COLOR_F {
@@ -67,6 +72,10 @@ const fn rgb(c: u32, a: f32) -> D2D1_COLOR_F {
 }
 const FG: D2D1_COLOR_F = rgb(0xD7DADF, 1.0);
 const BG: D2D1_COLOR_F = rgb(0x131417, 242.0 / 255.0);
+const PILL_BG: D2D1_COLOR_F = rgb(0x120A0B, 0.9);
+const DIM: D2D1_COLOR_F = rgb(0xD7DADF, 0.35);
+const WHITE: D2D1_COLOR_F = rgb(0xFFFFFF, 1.0);
+const MUTE_RED: D2D1_COLOR_F = rgb(BORDER_RGB, 1.0);
 
 unsafe extern "system" fn wndproc(h: HWND, m: u32, wp: WPARAM, lp: LPARAM) -> LRESULT {
     match m {
@@ -134,15 +143,36 @@ struct Popup {
     bmp: [HBITMAP; 3],
     rect: Rect,
     bmi: BITMAPINFO,
+    style: PopupStyle,
+    /// Pill only: where the pill sits in the window (0 left, 0.5 center, 1 right).
+    align: f32,
     icon_fmt: IDWriteTextFormat,
     text_fmt: IDWriteTextFormat,
+    clock_fmt: IDWriteTextFormat,
     icon_h: f32,
     radius: f32,
 }
 
+/// Width of `s` laid out in `fmt`.
+fn text_width(dw: &IDWriteFactory, s: &[u16], fmt: &IDWriteTextFormat) -> Result<f32> {
+    unsafe {
+        let l = dw.CreateTextLayout(s, fmt, 10_000.0, 1_000.0)?;
+        let mut m = DWRITE_TEXT_METRICS::default();
+        l.GetMetrics(&mut m)?;
+        Ok(m.widthIncludingTrailingWhitespace)
+    }
+}
+
 impl Popup {
-    /// Renders `glyph` + `text` into bitmap `slot` (created on first use, then reused).
-    fn draw(&mut self, r: &Renderer, slot: usize, glyph: &str, text: &str) -> Result<()> {
+    /// Renders the unmuted (`muted_secs` None) or muted state into bitmap `slot`
+    /// (created on first use, then reused).
+    fn draw(
+        &mut self,
+        r: &Renderer,
+        slot: usize,
+        lang: ResolvedLang,
+        muted_secs: Option<u64>,
+    ) -> Result<()> {
         let (w, h) = (
             self.rect.right - self.rect.left,
             self.rect.bottom - self.rect.top,
@@ -167,10 +197,33 @@ impl Popup {
                     bottom: h,
                 },
             )?;
-            let fg = r.rt.CreateSolidColorBrush(&FG, None)?;
-            let bg = r.rt.CreateSolidColorBrush(&BG, None)?;
             r.rt.BeginDraw();
             r.rt.Clear(Some(&D2D1_COLOR_F::default()));
+            let res = match self.style {
+                PopupStyle::Card => self.paint_card(r, wf, hf, lang, muted_secs),
+                PopupStyle::Pill => self.paint_pill(r, wf, hf, muted_secs),
+            };
+            let end = r.rt.EndDraw(None, None);
+            res.and(end)
+        }
+    }
+
+    fn paint_card(
+        &self,
+        r: &Renderer,
+        wf: f32,
+        hf: f32,
+        lang: ResolvedLang,
+        muted_secs: Option<u64>,
+    ) -> Result<()> {
+        let (glyph, text) = match muted_secs {
+            Some(s) => (GLYPH_MUTED, muted_text(lang, s)),
+            None => (GLYPH_UNMUTED, t(lang, Key::Unmuted).to_string()),
+        };
+        let text = text.as_str();
+        unsafe {
+            let fg = r.rt.CreateSolidColorBrush(&FG, None)?;
+            let bg = r.rt.CreateSolidColorBrush(&BG, None)?;
             r.rt.FillRoundedRectangle(
                 &D2D1_ROUNDED_RECT {
                     rect: D2D_RECT_F {
@@ -203,8 +256,75 @@ impl Popup {
             };
             draw(glyph, &self.icon_fmt, 0.0, self.icon_h);
             draw(text, &self.text_fmt, self.icon_h, hf);
-            r.rt.EndDraw(None, None)
+            Ok(())
         }
+    }
+
+    fn paint_pill(&self, r: &Renderer, wf: f32, hf: f32, muted_secs: Option<u64>) -> Result<()> {
+        let u = |s: &str| s.encode_utf16().collect::<Vec<u16>>();
+        let (glyph, label, accent, edge) = match muted_secs {
+            Some(_) => (GLYPH_MIC_OFF, PILL_MUTED, MUTE_RED, rgb(BORDER_RGB, 0.8)),
+            None => (GLYPH_UNMUTED, PILL_UNMUTED, FG, DIM),
+        };
+        let (glyph, label) = (u(glyph), u(label));
+        let clock = muted_secs.map(|s| u(&fmt_elapsed(s)));
+        let pad = hf * 0.36;
+        let gap = hf * 0.2;
+        let iw = text_width(&r.dw, &glyph, &self.icon_fmt)?;
+        let lw = text_width(&r.dw, &label, &self.text_fmt)?;
+        let cw = match &clock {
+            Some(c) => text_width(&r.dw, c, &self.clock_fmt)?,
+            None => 0.0,
+        };
+        let cgap = if clock.is_some() { gap * 1.4 } else { 0.0 };
+        let pw = (pad + iw + gap + lw + cgap + cw + pad).min(wf);
+        let x0 = (wf - pw) * self.align;
+        let sw = (hf / 30.0).max(1.0); // outline width
+        let brush = |c: &D2D1_COLOR_F| -> Result<ID2D1SolidColorBrush> {
+            unsafe { r.rt.CreateSolidColorBrush(c, None) }
+        };
+        let shape = D2D1_ROUNDED_RECT {
+            rect: D2D_RECT_F {
+                left: x0 + sw / 2.0,
+                top: sw / 2.0,
+                right: x0 + pw - sw / 2.0,
+                bottom: hf - sw / 2.0,
+            },
+            radiusX: (hf - sw) / 2.0,
+            radiusY: (hf - sw) / 2.0,
+        };
+        let put =
+            |s: &[u16], fmt: &IDWriteTextFormat, c: &D2D1_COLOR_F, x: f32, w: f32| -> Result<()> {
+                let lr = D2D_RECT_F {
+                    left: x,
+                    top: 0.0,
+                    right: x + w + 1.0,
+                    bottom: hf,
+                };
+                unsafe {
+                    r.rt.DrawText(
+                        s,
+                        fmt,
+                        &lr,
+                        &brush(c)?,
+                        D2D1_DRAW_TEXT_OPTIONS_NONE,
+                        DWRITE_MEASURING_MODE_NATURAL,
+                    );
+                }
+                Ok(())
+            };
+        unsafe {
+            r.rt.FillRoundedRectangle(&shape, &brush(&PILL_BG)?);
+            r.rt.DrawRoundedRectangle(&shape, &brush(&edge)?, sw, None);
+        }
+        let x = x0 + pad;
+        put(&glyph, &self.icon_fmt, &accent, x, iw)?;
+        let x = x + iw + gap;
+        put(&label, &self.text_fmt, &WHITE, x, lw)?;
+        if let Some(c) = &clock {
+            put(c, &self.clock_fmt, &FG, x + lw + cgap, cw)?;
+        }
+        Ok(())
     }
 
     fn show(&self, slot: usize) {
@@ -321,29 +441,84 @@ impl Renderer {
     }
 
     fn format(&self, family: PCWSTR, px: f32) -> Result<IDWriteTextFormat> {
+        self.format_w(
+            family,
+            px,
+            DWRITE_FONT_WEIGHT_NORMAL,
+            DWRITE_TEXT_ALIGNMENT_CENTER,
+        )
+    }
+
+    fn format_w(
+        &self,
+        family: PCWSTR,
+        px: f32,
+        weight: DWRITE_FONT_WEIGHT,
+        align: windows::Win32::Graphics::DirectWrite::DWRITE_TEXT_ALIGNMENT,
+    ) -> Result<IDWriteTextFormat> {
         unsafe {
             let f = self.dw.CreateTextFormat(
                 family,
                 None,
-                DWRITE_FONT_WEIGHT_NORMAL,
+                weight,
                 DWRITE_FONT_STYLE_NORMAL,
                 DWRITE_FONT_STRETCH_NORMAL,
                 px,
                 w!("en-us"),
             )?;
-            f.SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER)?;
+            f.SetTextAlignment(align)?;
             f.SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER)?;
             Ok(f)
         }
     }
 
     fn popup(&self, mon: &Monitor, cfg: &Config, lang: ResolvedLang) -> Result<Popup> {
-        let rect = popup_rect(mon.work, cfg.popup_position, cfg.popup_scale, mon.dpi);
+        let style = cfg.popup_style;
+        let rect = popup_rect(
+            mon.work,
+            cfg.popup_position,
+            style,
+            cfg.popup_scale,
+            mon.dpi,
+        );
         let s = cfg.popup_scale;
         let k = mon.dpi as f32 / 96.0;
         let pt = mon.dpi as f32 / 72.0; // physical px per point
-        let icon_fmt = self.format(self.icon_family, 22.0 * s * pt)?;
-        let text_fmt = self.format(w!("Segoe UI"), 9.5 * s * pt)?;
+        let (icon_fmt, text_fmt, clock_fmt) = match style {
+            PopupStyle::Card => (
+                self.format(self.icon_family, 22.0 * s * pt)?,
+                self.format(w!("Segoe UI"), 9.5 * s * pt)?,
+                self.format(w!("Segoe UI"), 9.5 * s * pt)?,
+            ),
+            PopupStyle::Pill => {
+                let lead = DWRITE_TEXT_ALIGNMENT_LEADING;
+                (
+                    self.format_w(
+                        self.icon_family,
+                        12.5 * s * pt,
+                        DWRITE_FONT_WEIGHT_NORMAL,
+                        lead,
+                    )?,
+                    self.format_w(
+                        w!("Segoe UI"),
+                        11.5 * s * pt,
+                        DWRITE_FONT_WEIGHT_SEMI_BOLD,
+                        lead,
+                    )?,
+                    self.format_w(
+                        w!("Segoe UI"),
+                        11.5 * s * pt,
+                        DWRITE_FONT_WEIGHT_NORMAL,
+                        lead,
+                    )?,
+                )
+            }
+        };
+        let align = match cfg.popup_position {
+            Position::TopLeft | Position::BottomLeft => 0.0,
+            Position::TopRight | Position::BottomRight => 1.0,
+            _ => 0.5,
+        };
         let bmi = BITMAPINFO {
             bmiHeader: BITMAPINFOHEADER {
                 biSize: size_of::<BITMAPINFOHEADER>() as u32,
@@ -364,13 +539,16 @@ impl Renderer {
             bmp: [HBITMAP::default(); 3],
             rect,
             bmi,
+            style,
+            align,
             icon_fmt,
             text_fmt,
+            clock_fmt,
             icon_h: 60.0 * s * k,
             radius: 14.0 * s * k,
         };
-        p.draw(self, 0, GLYPH_UNMUTED, t(lang, Key::Unmuted))?;
-        p.draw(self, 1, GLYPH_MUTED, &muted_text(lang, 0))?;
+        p.draw(self, 0, lang, None)?;
+        p.draw(self, 1, lang, Some(0))?;
         Ok(p)
     }
 }
@@ -676,9 +854,9 @@ impl Indicators {
         let (Some(r), Some(t0)) = (&self.renderer, self.muted_since) else {
             return;
         };
-        let text = muted_text(self.lang, t0.elapsed().as_secs());
+        let secs = t0.elapsed().as_secs();
         for p in &mut self.popups {
-            if let Err(e) = p.draw(r, 2, GLYPH_MUTED, &text) {
+            if let Err(e) = p.draw(r, 2, self.lang, Some(secs)) {
                 crate::log::write(format!("overlay: clock draw failed: {e}"));
             }
         }

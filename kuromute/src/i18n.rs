@@ -81,6 +81,8 @@ pub enum Key {
     BorderStyle,
     BorderSolid,
     BorderGlow,
+    PopupCard,
+    PopupPill,
     SecMonitors,
     AllMonitors,
     SecSound,
@@ -129,7 +131,7 @@ pub enum Key {
 
 impl Key {
     #[cfg(test)]
-    pub const ALL: [Key; 100] = [
+    pub const ALL: [Key; 102] = [
         Key::Muted,
         Key::Unmuted,
         Key::MicDisconnected,
@@ -186,6 +188,8 @@ impl Key {
         Key::BorderStyle,
         Key::BorderSolid,
         Key::BorderGlow,
+        Key::PopupCard,
+        Key::PopupPill,
         Key::SecMonitors,
         Key::AllMonitors,
         Key::SecSound,
@@ -320,8 +324,12 @@ pub fn t(l: ResolvedLang, k: Key) -> &'static str {
         (TalkWarnEnabled, Id) => "Ingatkan kalau ngomong pas mute",
         (TalkWarnSource, En) => "Physical mic to listen to",
         (TalkWarnSource, Id) => "Mic fisik yang dipantau",
-        (TalkWarnNote, En) => "Pick your real mic, not the one you mute. Works only while another app (e.g. Wave Link) is using that mic.",
-        (TalkWarnNote, Id) => "Pilih mic asli, bukan mic yang di-mute. Cuma jalan kalau ada app lain (mis. Wave Link) yang lagi pakai mic itu.",
+        (TalkWarnNote, En) => {
+            "Pick your real mic, not the one you mute. Works only while another app (e.g. Wave Link) is using that mic."
+        }
+        (TalkWarnNote, Id) => {
+            "Pilih mic asli, bukan mic yang di-mute. Cuma jalan kalau ada app lain (mis. Wave Link) yang lagi pakai mic itu."
+        }
         (SecTest, En) => "TEST",
         (SecTest, Id) => "TES",
         (TestLabel, En) => "Toggle mute now",
@@ -358,6 +366,10 @@ pub fn t(l: ResolvedLang, k: Key) -> &'static str {
         (BorderSolid, Id) => "Solid",
         (BorderGlow, En) => "Glow",
         (BorderGlow, Id) => "Glow",
+        (PopupCard, En) => "Card",
+        (PopupCard, Id) => "Kartu",
+        (PopupPill, En) => "Pill",
+        (PopupPill, Id) => "Pil",
         (SecMonitors, En) => "MONITORS",
         (SecMonitors, Id) => "MONITOR",
         (AllMonitors, En) => "All monitors",

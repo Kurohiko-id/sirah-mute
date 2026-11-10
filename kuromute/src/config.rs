@@ -29,6 +29,12 @@ pub enum BorderStyle {
     Glow,
 }
 #[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Debug, Default)]
+pub enum PopupStyle {
+    #[default]
+    Card,
+    Pill,
+}
+#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Debug, Default)]
 pub enum Lang {
     #[default]
     Auto,
@@ -74,6 +80,8 @@ pub struct Config {
     pub popup_position: Position,
     pub popup_scale: f32,
     pub popup_persist_while_muted: bool,
+    #[serde(deserialize_with = "or_default")]
+    pub popup_style: PopupStyle,
     pub border_enabled: bool,
     pub border_thickness: u32,
     #[serde(deserialize_with = "or_default")]
@@ -104,6 +112,7 @@ impl Default for Config {
             popup_position: Position::default(),
             popup_scale: 1.0,
             popup_persist_while_muted: false,
+            popup_style: PopupStyle::default(),
             border_enabled: false,
             border_thickness: 6,
             border_style: BorderStyle::default(),
@@ -244,6 +253,14 @@ mod tests {
             (Position::BottomCenter, 11)
         );
     }
+    #[test]
+    fn popup_style_defaults_to_card_for_old_configs() {
+        let c: Config = serde_json::from_str("{}").unwrap();
+        assert_eq!(c.popup_style, PopupStyle::Card);
+        let c: Config = serde_json::from_str(r#"{"popup_style":"Pill"}"#).unwrap();
+        assert_eq!(c.popup_style, PopupStyle::Pill);
+    }
+
     #[test]
     fn border_style_defaults_to_glow_for_old_configs() {
         let c: Config = serde_json::from_str(r#"{"border_thickness":6}"#).unwrap();
