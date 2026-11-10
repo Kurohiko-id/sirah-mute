@@ -62,7 +62,7 @@ const GLYPH_MIC_OFF: &str = "\u{EC54}"; // MicOff (pill style)
 const PILL_MUTED: &str = "Mic mute";
 const PILL_UNMUTED: &str = "Mic on";
 
-const fn rgb(c: u32, a: f32) -> D2D1_COLOR_F {
+pub(crate) const fn rgb(c: u32, a: f32) -> D2D1_COLOR_F {
     D2D1_COLOR_F {
         r: ((c >> 16) & 0xFF) as f32 / 255.0,
         g: ((c >> 8) & 0xFF) as f32 / 255.0,
@@ -93,7 +93,7 @@ unsafe extern "system" fn wndproc(h: HWND, m: u32, wp: WPARAM, lp: LPARAM) -> LR
     }
 }
 
-fn hinstance() -> HINSTANCE {
+pub(crate) fn hinstance() -> HINSTANCE {
     unsafe { GetModuleHandleW(None) }
         .map(|m| HINSTANCE(m.0))
         .unwrap_or_default()
@@ -154,7 +154,7 @@ struct Popup {
 }
 
 /// Width of `s` laid out in `fmt`.
-fn text_width(dw: &IDWriteFactory, s: &[u16], fmt: &IDWriteTextFormat) -> Result<f32> {
+pub(crate) fn text_width(dw: &IDWriteFactory, s: &[u16], fmt: &IDWriteTextFormat) -> Result<f32> {
     unsafe {
         let l = dw.CreateTextLayout(s, fmt, 10_000.0, 1_000.0)?;
         let mut m = DWRITE_TEXT_METRICS::default();
@@ -402,14 +402,14 @@ impl Drop for Popup {
 }
 
 /// Shared D2D/DWrite objects for one `rebuild`.
-struct Renderer {
-    rt: ID2D1DCRenderTarget,
-    dw: IDWriteFactory,
-    icon_family: PCWSTR,
+pub(crate) struct Renderer {
+    pub(crate) rt: ID2D1DCRenderTarget,
+    pub(crate) dw: IDWriteFactory,
+    pub(crate) icon_family: PCWSTR,
 }
 
 impl Renderer {
-    fn new() -> Result<Self> {
+    pub(crate) fn new() -> Result<Self> {
         unsafe {
             let d2d: ID2D1Factory = D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, None)?;
             // dpi 96 => 1 DIP == 1 physical pixel; sizes are pre-scaled per monitor.
@@ -449,7 +449,7 @@ impl Renderer {
         )
     }
 
-    fn format_w(
+    pub(crate) fn format_w(
         &self,
         family: PCWSTR,
         px: f32,

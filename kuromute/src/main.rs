@@ -13,6 +13,7 @@ mod monitors;
 mod msg;
 mod overlay;
 mod policy_config;
+mod prompt;
 mod settings;
 mod sound;
 mod talk;

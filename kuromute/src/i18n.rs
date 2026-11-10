@@ -127,11 +127,20 @@ pub enum Key {
     SupportTopupBtn,
     MadeWithSlint,
     CoreNotRunning,
+    DriftTitleMic,
+    DriftTitleSpeaker,
+    DriftTitleBoth,
+    DriftMicNow,
+    DriftSpeakerNow,
+    DriftYourPick,
+    DriftSwitchBack,
+    DriftKeep,
+    DriftSnooze,
 }
 
 impl Key {
     #[cfg(test)]
-    pub const ALL: [Key; 102] = [
+    pub const ALL: [Key; 111] = [
         Key::Muted,
         Key::Unmuted,
         Key::MicDisconnected,
@@ -234,6 +243,15 @@ impl Key {
         Key::SupportTopupBtn,
         Key::MadeWithSlint,
         Key::CoreNotRunning,
+        Key::DriftTitleMic,
+        Key::DriftTitleSpeaker,
+        Key::DriftTitleBoth,
+        Key::DriftMicNow,
+        Key::DriftSpeakerNow,
+        Key::DriftYourPick,
+        Key::DriftSwitchBack,
+        Key::DriftKeep,
+        Key::DriftSnooze,
     ];
 }
 
@@ -459,6 +477,24 @@ pub fn t(l: ResolvedLang, k: Key) -> &'static str {
         (CoreNotRunning, En) => "Sirah Mute is not running; changes apply on its next start",
         (CoreNotRunning, Id) => "Sirah Mute tidak jalan; perubahan dipakai saat start berikutnya",
         (AppName, _) => "Sirah Mute",
+        (DriftTitleMic, En) => "Default mic changed",
+        (DriftTitleMic, Id) => "Mic default berubah",
+        (DriftTitleSpeaker, En) => "Default speaker changed",
+        (DriftTitleSpeaker, Id) => "Speaker default berubah",
+        (DriftTitleBoth, En) => "Default devices changed",
+        (DriftTitleBoth, Id) => "Device default berubah",
+        (DriftMicNow, En) => "Mic now:",
+        (DriftMicNow, Id) => "Mic sekarang:",
+        (DriftSpeakerNow, En) => "Speaker now:",
+        (DriftSpeakerNow, Id) => "Speaker sekarang:",
+        (DriftYourPick, En) => "Your pick:",
+        (DriftYourPick, Id) => "Pilihanmu:",
+        (DriftSwitchBack, En) => "Switch back",
+        (DriftSwitchBack, Id) => "Balikin",
+        (DriftKeep, En) => "Keep for now",
+        (DriftKeep, Id) => "Biarin",
+        (DriftSnooze, En) => "Remind in 15 min",
+        (DriftSnooze, Id) => "Ingetin 15 mnt lagi",
     }
 }
 

@@ -5,6 +5,7 @@ use crate::enforcer::{Action, Enforcer};
 use crate::i18n::{self, Key, ResolvedLang, t};
 use crate::msg::*;
 use crate::overlay::{Indicators, TIMER_MUTE_CLOCK, TIMER_POPUP_HIDE, TIMER_PULSE};
+use crate::prompt::{self, Choice, Prompt, Row};
 use crate::talk::TalkDetector;
 use crate::tray::{MenuCmd, Tray, TrayState};
 use crate::update::{self, Release};
@@ -42,6 +43,8 @@ const TIMER_DISPLAY: usize = 3;
 const TIMER_GUARD_RESUME: usize = 4;
 const TIMER_SETTINGS_WATCH: usize = 5;
 pub(crate) const TIMER_TALK: usize = 8;
+const TIMER_DRIFT_SNOOZE: usize = 9;
+const DRIFT_SNOOZE_MS: u32 = 15 * 60 * 1000;
 const TALK_POLL_MS: u32 = 100;
 pub(crate) const VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -257,6 +260,34 @@ enum Pending {
     OpenUrl(String),
 }
 
+/// Guard Notify episode: no drift, prompt up, user said keep (quiet until defaults match again),
+/// or snoozed (asks again when TIMER_DRIFT_SNOOZE fires).
+#[derive(Clone, Copy, PartialEq, Debug)]
+enum Drift {
+    Clear,
+    Asking,
+    Kept,
+    Snoozed,
+}
+
+/// Drift state after a guard check; `true` = show the prompt now.
+fn drift_after_check(d: Drift, notify: bool) -> (Drift, bool) {
+    match (notify, d) {
+        (false, _) => (Drift::Clear, false),
+        (true, Drift::Clear) => (Drift::Asking, true),
+        (true, d) => (d, false),
+    }
+}
+
+/// Drift state after a prompt button. Switch back also goes quiet: the defaults match again once
+/// the switch lands, which clears it; until then a device event must not re-ask.
+fn drift_after_choice(c: Choice) -> Drift {
+    match c {
+        Choice::SwitchBack | Choice::Keep => Drift::Kept,
+        Choice::Snooze => Drift::Snoozed,
+    }
+}
+
 struct State {
     hwnd: HWND,
     cfg: Config,
@@ -271,6 +302,8 @@ struct State {
     last_muted: Option<bool>,
     pending_toggle_at: Option<Instant>,
     pending_balloon: Option<Pending>,
+    drift: Drift,
+    prompt: Option<Prompt>,
     hotkey_err: Option<String>,
     devices_armed: bool,
     settings_child: Option<Child>,
@@ -407,6 +440,12 @@ impl State {
         if self.last_muted == Some(true) {
             self.ind.show(self.hwnd, true, false);
         }
+        if self.drift == Drift::Asking {
+            // Monitor layout changed: ask again so the prompt lands in the new work area.
+            self.drift = Drift::Clear;
+            self.prompt = None;
+            self.guard_check();
+        }
     }
 
     fn configured_defaults(&self, input: bool, output: bool) -> Vec<String> {
@@ -424,22 +463,22 @@ impl State {
             self.cfg.default_input_id.as_deref(),
             self.cfg.default_output_id.as_deref(),
         );
-        let drift_pending = matches!(self.pending_balloon, Some(Pending::ReapplyDefaults));
-        match self.enforcer.evaluate(&self.cfg, &d, Instant::now()) {
-            Action::None => {
-                if drift_pending {
-                    self.pending_balloon = None;
-                }
-            }
+        let action = self.enforcer.evaluate(&self.cfg, &d, Instant::now());
+        let notify = matches!(action, Action::Notify { .. });
+        let (next, ask) = drift_after_check(self.drift, notify);
+        if next == Drift::Clear {
+            self.prompt = None;
+        }
+        self.drift = next;
+        match action {
+            Action::None => {}
             Action::Revert { input, output } => {
                 log!("guard: revert input={input} output={output}");
                 spawn_set_defaults(self.configured_defaults(input, output));
             }
-            // ponytail: one balloon per drift episode; re-notifies only after defaults match again
-            Action::Notify { .. } if !drift_pending => {
-                log!("guard: drift, notifying");
-                self.balloon(t(self.lang, Key::DriftNotify));
-                self.pending_balloon = Some(Pending::ReapplyDefaults);
+            Action::Notify { input, output } if ask => {
+                log!("guard: drift input={input} output={output}, asking");
+                self.show_drift(input, output, &d);
             }
             Action::Notify { .. } => {}
             Action::GiveUp => {
@@ -447,6 +486,78 @@ impl State {
                 self.balloon(t(self.lang, Key::GuardPaused));
                 self.arm(TIMER_GUARD_RESUME, 300_000);
             }
+        }
+    }
+
+    /// Shows the drift prompt on the primary monitor; falls back to a balloon if it can't.
+    fn show_drift(&mut self, input: bool, output: bool, d: &crate::enforcer::Defaults) {
+        let name = |flow: audio::Flow, id: Option<&str>| -> String {
+            let id = id.unwrap_or_default();
+            self.audio
+                .list(flow)
+                .into_iter()
+                .find(|x| x.id == id)
+                .map(|x| x.name)
+                .unwrap_or_else(|| "?".into())
+        };
+        // "Now" = the first role that isn't the pick (drift can be in one role only).
+        let now = |roles: &[Option<String>; 3], pick: &Option<String>| {
+            roles.iter().flatten().find(|r| Some(*r) != pick.as_ref()).cloned()
+        };
+        let mut rows = Vec::new();
+        if input {
+            let pick = &self.cfg.default_input_id;
+            rows.push(Row {
+                now_label: Key::DriftMicNow,
+                now: name(audio::Flow::Capture, now(&d.capture, pick).as_deref()),
+                pick: name(audio::Flow::Capture, pick.as_deref()),
+            });
+        }
+        if output {
+            let pick = &self.cfg.default_output_id;
+            rows.push(Row {
+                now_label: Key::DriftSpeakerNow,
+                now: name(audio::Flow::Render, now(&d.render, pick).as_deref()),
+                pick: name(audio::Flow::Render, pick.as_deref()),
+            });
+        }
+        let title = match (input, output) {
+            (true, true) => Key::DriftTitleBoth,
+            (true, false) => Key::DriftTitleMic,
+            _ => Key::DriftTitleSpeaker,
+        };
+        let mons = monitors::enumerate();
+        let shown = mons
+            .iter()
+            .find(|m| m.primary)
+            .or(mons.first())
+            .map(|m| prompt::show(m, self.lang, title, &rows));
+        match shown {
+            Some(Ok(p)) => self.prompt = Some(p),
+            other => {
+                if let Some(Err(e)) = other {
+                    log!("drift prompt: {e}");
+                }
+                self.balloon(t(self.lang, Key::DriftNotify));
+                self.pending_balloon = Some(Pending::ReapplyDefaults);
+            }
+        }
+    }
+
+    fn on_drift_choice(&mut self, wp: usize) {
+        let Some(c) = Choice::from_wparam(wp) else {
+            return;
+        };
+        if self.drift != Drift::Asking {
+            return;
+        }
+        log!("guard: drift choice {c:?}");
+        self.prompt = None;
+        self.drift = drift_after_choice(c);
+        match c {
+            Choice::SwitchBack => spawn_set_defaults(self.configured_defaults(true, true)),
+            Choice::Keep => {}
+            Choice::Snooze => self.arm(TIMER_DRIFT_SNOOZE, DRIFT_SNOOZE_MS),
         }
     }
 
@@ -564,6 +675,7 @@ impl State {
     fn exit(&mut self) {
         hotkey::unregister(self.hwnd, HOTKEY_ID);
         self.ind.destroy();
+        self.prompt = None;
         self.tray.remove();
         unsafe { PostQuitMessage(0) };
     }
@@ -689,6 +801,10 @@ impl State {
                         self.guard_check();
                     }
                     TIMER_GUARD_RESUME => self.guard_check(),
+                    TIMER_DRIFT_SNOOZE if self.drift == Drift::Snoozed => {
+                        self.drift = Drift::Clear;
+                        self.guard_check();
+                    }
                     TIMER_DISPLAY => self.rebuild_indicators(),
                     TIMER_SETTINGS_WATCH if self.hotkey_paused => {
                         let gone = match (self.settings_proc, self.settings_child.as_mut()) {
@@ -709,6 +825,7 @@ impl State {
                 }
             }
             WM_APP_TRAY => self.on_tray(lp),
+            WM_APP_DRIFT_CHOICE => self.on_drift_choice(wp.0),
             WM_APP_UPDATE => self.on_update(wp.0 != 0),
             _ if m == r.toggle => self.on_toggle(),
             _ if m == r.reload => self.reload(),
@@ -761,6 +878,7 @@ fn is_ours(m: u32) -> bool {
             | WM_APP_DEVICES
             | WM_APP_UPDATE
             | WM_APP_TRAY
+            | WM_APP_DRIFT_CHOICE
     ) || (m != 0 && [r.reload, r.show, r.toggle, r.pause, r.taskbar].contains(&m))
 }
 
@@ -894,6 +1012,8 @@ pub fn run() -> i32 {
         last_muted: None,
         pending_toggle_at: None,
         pending_balloon: None,
+        drift: Drift::Clear,
+        prompt: None,
         hotkey_err: None,
         devices_armed: false,
         settings_child: None,
@@ -921,6 +1041,21 @@ pub fn run() -> i32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn drift_asks_once_per_episode() {
+        assert_eq!(drift_after_check(Drift::Clear, true), (Drift::Asking, true));
+        assert_eq!(drift_after_check(Drift::Asking, true), (Drift::Asking, false));
+        assert_eq!(drift_after_check(Drift::Kept, true), (Drift::Kept, false));
+        assert_eq!(drift_after_check(Drift::Snoozed, true), (Drift::Snoozed, false));
+        // Defaults match again (or guard off / AutoRevert): episode over, next drift asks again.
+        for d in [Drift::Asking, Drift::Kept, Drift::Snoozed] {
+            assert_eq!(drift_after_check(d, false), (Drift::Clear, false));
+        }
+        assert_eq!(drift_after_choice(Choice::SwitchBack), Drift::Kept);
+        assert_eq!(drift_after_choice(Choice::Keep), Drift::Kept);
+        assert_eq!(drift_after_choice(Choice::Snooze), Drift::Snoozed);
+    }
 
     #[test]
     fn only_github_release_urls_open() {

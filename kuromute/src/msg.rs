@@ -9,6 +9,8 @@ pub const WM_APP_UPDATE: u32 = WM_APP + 3;
 #[allow(dead_code)] // reserved; set_default workers log their own result
 pub const WM_APP_DEFAULTS_SET: u32 = WM_APP + 4;
 pub const WM_APP_TRAY: u32 = WM_APP + 5;
+/// From the drift prompt; wparam: `prompt::Choice`.
+pub const WM_APP_DRIFT_CHOICE: u32 = WM_APP + 6;
 
 /// Names for RegisterWindowMessageW.
 pub const MSG_RELOAD: PCWSTR = w!("SirahMute.Reload");
