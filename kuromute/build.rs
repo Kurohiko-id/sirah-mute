@@ -1,7 +1,7 @@
 fn main() {
-    println!("cargo:rerun-if-changed=../app.ico");
+    println!("cargo:rerun-if-changed=assets/sirah.ico");
     let mut res = winresource::WindowsResource::new();
-    res.set_icon("../app.ico")
+    res.set_icon("assets/sirah.ico")
         .set("ProductName", "Sirah Mute")
         .set("FileDescription", "Sirah Mute: never talk into a muted mic again")
         .set("CompanyName", "Kurohiko")

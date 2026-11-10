@@ -21,10 +21,11 @@ use windows::Win32::UI::WindowsAndMessaging::{
 };
 use windows::core::{PCWSTR, Result};
 
-const APP_ICO: &[u8] = include_bytes!("../../app.ico");
+/// Lit lamp (muted, exe icon) and unlit lamp (unmuted).
+const APP_ICO: &[u8] = include_bytes!("../assets/sirah.ico");
+const OFF_ICO: &[u8] = include_bytes!("../assets/sirah-off.ico");
 const ICON_ID: u32 = 1;
-const RED: u32 = 0xE5484D;
-const GREY: u32 = 0x8A8F98;
+const AMBER: u32 = 0xF5A524;
 /// Badge diameter as a fraction of the icon size.
 const BADGE: f32 = 0.45;
 
@@ -65,10 +66,13 @@ pub struct Tray {
 impl Tray {
     pub fn add(hwnd: HWND) -> Self {
         let size = unsafe { GetSystemMetrics(SM_CXSMICON) }.max(16);
-        let plain = load_app_icon(size).unwrap_or_else(|e| {
-            log!("tray: app icon load failed: {e}");
-            HICON::default()
-        });
+        let load = |ico| {
+            load_app_icon(ico, size).unwrap_or_else(|e| {
+                log!("tray: icon load failed: {e}");
+                HICON::default()
+            })
+        };
+        let (plain, red) = (load(OFF_ICO), load(APP_ICO));
         let badge = |c| {
             badged(plain, size, c).unwrap_or_else(|e| {
                 log!("tray: badge icon failed: {e}");
@@ -78,8 +82,8 @@ impl Tray {
         let mut tray = Tray {
             hwnd,
             plain,
-            red: badge(RED),
-            grey: badge(GREY),
+            red,
+            grey: badge(AMBER),
             state: TrayState::Unmuted,
             tip: t(ResolvedLang::En, Key::AppName).to_string(),
         };
@@ -221,14 +225,14 @@ fn copy_trunc(dst: &mut [u16], s: &str) {
     dst[i] = 0;
 }
 
-fn load_app_icon(size: i32) -> Result<HICON> {
+fn load_app_icon(ico: &[u8], size: i32) -> Result<HICON> {
     unsafe {
-        let off = LookupIconIdFromDirectoryEx(APP_ICO.as_ptr(), true, size, size, LR_DEFAULTCOLOR);
+        let off = LookupIconIdFromDirectoryEx(ico.as_ptr(), true, size, size, LR_DEFAULTCOLOR);
         if off <= 0 {
             return Err(windows::core::Error::from_thread());
         }
         CreateIconFromResourceEx(
-            &APP_ICO[off as usize..],
+            &ico[off as usize..],
             true,
             0x0003_0000,
             size,
