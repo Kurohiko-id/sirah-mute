@@ -1,0 +1,69 @@
+<!-- README hero banner for Sirah Mute. Render: chrome --headless --screenshot --window-size=1600,640 -->
+<style>
+:root{--red:#E5484D;--ink:#0E0F12;--fg:#ECEDEF;--mute:#9AA0AA}
+*{box-sizing:border-box;margin:0}
+html,body{width:1600px;height:640px;overflow:hidden}
+body{background:radial-gradient(900px 500px at 78% 40%,#2a1416 0%,transparent 70%),var(--ink);
+ font-family:"Segoe UI Variable Display","Segoe UI",sans-serif;color:var(--fg);display:flex;align-items:center;gap:72px;padding:0 80px}
+.left{width:520px;display:flex;flex-direction:column;gap:26px}
+.mark{width:120px;height:120px}
+h1{font-size:64px;font-weight:700;letter-spacing:-1.5px;line-height:1}
+.tag{font-size:40px;font-weight:600;line-height:1.18;letter-spacing:-.4px}
+.tag b{color:var(--red);font-weight:700}
+.sub{font-size:21px;color:var(--mute);line-height:1.5}
+.screen{position:relative;width:860px;height:500px;border-radius:14px;overflow:hidden;
+ background:linear-gradient(180deg,#1d2a44 0%,#3b3156 45%,#7a4a52 75%,#2b1d22 100%);
+ box-shadow:0 30px 80px rgba(0,0,0,.55)}
+.screen svg.scene{position:absolute;inset:0}
+.glow{position:absolute;inset:0;border-radius:14px;pointer-events:none;
+ box-shadow:inset 0 0 0 5px var(--red),inset 0 0 34px 10px rgba(229,72,77,.65),inset 0 0 90px 20px rgba(229,72,77,.25)}
+.live{position:absolute;left:28px;top:26px;display:flex;align-items:center;gap:8px;background:rgba(0,0,0,.45);
+ padding:6px 12px;border-radius:6px;font-size:15px;font-weight:700;letter-spacing:1px}
+.live i{width:9px;height:9px;border-radius:50%;background:#ff3b3b}
+.pill{position:absolute;right:30px;top:24px;display:flex;align-items:center;gap:11px;height:48px;padding:0 20px;
+ border-radius:24px;background:rgba(18,10,11,.92);border:1.6px solid rgba(229,72,77,.85);font-size:19px}
+.pill .ic{font-family:"Segoe Fluent Icons","Segoe MDL2 Assets";color:var(--red);font-size:20px}
+.pill .lb{font-weight:600}
+.pill .ck{color:#D7DADF;font-variant-numeric:tabular-nums;margin-left:4px}
+.bar{position:absolute;left:0;right:0;bottom:0;height:46px;background:rgba(12,13,16,.86);
+ display:flex;align-items:center;justify-content:flex-end;gap:16px;padding:0 22px;font-size:14px;color:#cfd2d8}
+.bar .tray{display:flex;gap:12px;align-items:center}
+.bar .dot{width:16px;height:16px;border-radius:4px;background:#3a3d44}
+.bar svg{width:20px;height:20px}
+.bar .time{text-align:right;line-height:1.25;font-variant-numeric:tabular-nums}
+.bub{position:absolute;right:30px;bottom:66px;width:250px;display:flex;flex-direction:column;gap:8px}
+.bub div{background:rgba(0,0,0,.42);border-radius:8px;padding:8px 12px;font-size:14px;color:#e6e7ea}
+.bub b{color:#9ad1ff;font-weight:600}
+body.social{width:1280px;height:640px;gap:44px;padding:0 56px}
+body.social .left{width:400px;gap:20px}
+body.social .mark{width:92px;height:92px}
+body.social .tag{font-size:30px}
+body.social .sub{font-size:18px}
+body.social .screen{width:724px;height:440px}
+</style>
+<div class="left">
+  <svg class="mark" viewBox="0 0 256 256"><path fill="#E5484D" d="M68,173.86 L68,72 A60,60 0 0 1 185.83,56.03 Z"/><path fill="#E5484D" d="M188,82.14 L188,184 A60,60 0 0 1 70.17,199.97 Z"/></svg>
+  <h1 id="name" hidden>Sirah Mute</h1>
+  <div class="tag">Never talk into a <b>muted</b> mic again.</div>
+  <div class="sub">A red glow around your screen, a popup with the mute timer, and a nudge if you talk while muted.</div>
+</div>
+<div class="screen">
+  <svg class="scene" viewBox="0 0 860 500" preserveAspectRatio="none">
+    <circle cx="610" cy="250" r="70" fill="#f0a36b" opacity=".55"/>
+    <path d="M0 330 L120 260 L230 310 L360 220 L480 300 L600 240 L720 300 L860 250 L860 500 L0 500Z" fill="#2c2340"/>
+    <path d="M0 380 L150 330 L300 370 L430 320 L570 380 L700 340 L860 375 L860 500 L0 500Z" fill="#1c1626"/>
+  </svg>
+  <div class="live"><i></i>LIVE</div>
+  <div class="pill"><span class="ic">&#xEC54;</span><span class="lb">Mic mute</span><span class="ck">0:42</span></div>
+  <div class="bub">
+    <div><b>rina_</b> hello?? you're muted lol</div>
+    <div><b>dimas</b> we can't hear you</div>
+  </div>
+  <div class="bar">
+    <div class="tray"><span class="dot"></span><span class="dot"></span>
+      <svg viewBox="0 0 256 256"><path fill="#E5484D" d="M68,168.2 L68,72 A60,60 0 0 1 184.47,51.73 Z"/><path fill="#E5484D" d="M188,87.8 L188,184 A60,60 0 0 1 71.53,204.27 Z"/></svg></div>
+    <div class="time">21:37<br>10/11/2026</div>
+  </div>
+  <div class="glow"></div>
+</div>
+<script>if(location.hash=='#social'){document.body.className='social';document.getElementById('name').hidden=false}</script>
