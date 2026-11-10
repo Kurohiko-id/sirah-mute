@@ -138,14 +138,14 @@ pub fn create_hidden_window() -> windows::core::Result<HWND> {
         let wc = WNDCLASSW {
             lpfnWndProc: Some(wndproc),
             hInstance: hi.into(),
-            lpszClassName: w!("KuroMuteSettingsSink"),
+            lpszClassName: w!("SirahMuteSettingsSink"),
             ..Default::default()
         };
         RegisterClassW(&wc);
         CreateWindowExW(
             WINDOW_EX_STYLE::default(),
-            w!("KuroMuteSettingsSink"),
-            w!("KuroMuteSettingsSink"),
+            w!("SirahMuteSettingsSink"),
+            w!("SirahMuteSettingsSink"),
             WS_OVERLAPPED,
             0,
             0,

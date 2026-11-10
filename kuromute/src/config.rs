@@ -143,7 +143,21 @@ impl Config {
 }
 
 pub fn data_dir() -> PathBuf {
+    PathBuf::from(std::env::var_os("APPDATA").unwrap_or_default()).join("SirahMute")
+}
+/// Pre-rename data folder (v1 `settings.json` and Kuro Mute v2 `config.json`).
+pub fn legacy_dir() -> PathBuf {
     PathBuf::from(std::env::var_os("APPDATA").unwrap_or_default()).join("MuteMic")
+}
+
+/// First run after the rename: copies `config.json` from `old` into `new` when
+/// `new` has none yet. The old folder is left alone (v1 may still read it).
+pub fn adopt_legacy(old: &Path, new: &Path) -> bool {
+    let (src, dst) = (old.join("config.json"), new.join("config.json"));
+    if dst.exists() || !src.exists() {
+        return false;
+    }
+    fs::create_dir_all(new).is_ok() && fs::copy(&src, &dst).is_ok()
 }
 pub fn config_path() -> PathBuf {
     data_dir().join("config.json")
@@ -207,7 +221,7 @@ mod tests {
     use std::fs;
 
     fn tmp(name: &str) -> PathBuf {
-        let d = std::env::temp_dir().join(format!("kuromute-test-{}-{}", name, std::process::id()));
+        let d = std::env::temp_dir().join(format!("sirahmute-test-{}-{}", name, std::process::id()));
         let _ = fs::remove_dir_all(&d);
         fs::create_dir_all(&d).unwrap();
         d
@@ -253,6 +267,21 @@ mod tests {
             (Position::BottomCenter, 11)
         );
     }
+    #[test]
+    fn adopt_legacy_copies_once() {
+        let base = std::env::temp_dir().join(format!("sirahmute-adopt-{}", std::process::id()));
+        let (old, new) = (base.join("old"), base.join("new"));
+        let _ = fs::remove_dir_all(&base);
+        assert!(!adopt_legacy(&old, &new)); // nothing to adopt
+        fs::create_dir_all(&old).unwrap();
+        fs::write(old.join("config.json"), "{}").unwrap();
+        assert!(adopt_legacy(&old, &new));
+        fs::write(new.join("config.json"), "{\"v\":1}").unwrap();
+        assert!(!adopt_legacy(&old, &new)); // never overwrites
+        assert_eq!(fs::read_to_string(new.join("config.json")).unwrap(), "{\"v\":1}");
+        let _ = fs::remove_dir_all(&base);
+    }
+
     #[test]
     fn popup_style_defaults_to_card_for_old_configs() {
         let c: Config = serde_json::from_str("{}").unwrap();
@@ -355,7 +384,7 @@ mod tests {
     #[test]
     fn missing_file_is_missing() {
         assert_eq!(
-            load(&std::env::temp_dir().join("kuromute-nonexistent/config.json")),
+            load(&std::env::temp_dir().join("sirahmute-nonexistent/config.json")),
             LoadOutcome::Missing
         );
     }

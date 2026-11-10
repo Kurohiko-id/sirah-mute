@@ -59,7 +59,11 @@ fn main() {
     unsafe {
         let _ = SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
     }
+    let adopted = config::adopt_legacy(&config::legacy_dir(), &config::data_dir());
     log::init(&config::data_dir().join("logs"));
+    if adopted {
+        log!("config: adopted config.json from the MuteMic folder");
+    }
     log::install_panic_hook();
     let code = match std::env::args().nth(1).as_deref() {
         Some("--list-devices") => {

@@ -1,6 +1,6 @@
 //! Core app: hidden window, message loop and all runtime state.
 
-use crate::config::{self, Config, LoadOutcome, config_path, data_dir};
+use crate::config::{self, Config, LoadOutcome, config_path};
 use crate::enforcer::{Action, Enforcer};
 use crate::i18n::{self, Key, ResolvedLang, t};
 use crate::msg::*;
@@ -125,7 +125,7 @@ pub(crate) fn report_bug_url(build: &str) -> String {
     let body =
         format!("**App version:** {VERSION}\n**OS build:** {build}\n\nDescribe the bug here:\n");
     format!(
-        "https://github.com/Kurohiko-id/Kuro-Mute-Force-Mic-Input/issues/new?labels=bug&title=Bug%3A%20&body={}",
+        "https://github.com/Kurohiko-id/sirah-mute/issues/new?labels=bug&title=Bug%3A%20&body={}",
         pct(&body)
     )
 }
@@ -798,7 +798,7 @@ fn create_window() -> windows::core::Result<HWND> {
         CreateWindowExW(
             WINDOW_EX_STYLE::default(),
             WINDOW_CLASS,
-            w!("KuroMute"),
+            w!("SirahMute"),
             WS_OVERLAPPED,
             0,
             0,
@@ -818,7 +818,7 @@ fn load_startup() -> (Config, bool, Option<String>) {
     match config::load(&path) {
         LoadOutcome::Loaded(c) => (c, true, None),
         LoadOutcome::Missing => {
-            let legacy = data_dir().join("settings.json");
+            let legacy = config::legacy_dir().join("settings.json");
             let cfg = match std::fs::read_to_string(&legacy) {
                 Ok(s) => match migrate::from_legacy(&s) {
                     Ok(c) => Some(c),
@@ -858,7 +858,7 @@ fn load_startup() -> (Config, bool, Option<String>) {
 pub fn run() -> i32 {
     unsafe {
         // Handle intentionally kept open for the life of the process.
-        let _ = CreateMutexW(None, false, w!("Local\\KuroMute.Core"));
+        let _ = CreateMutexW(None, false, w!("Local\\SirahMute.Core"));
         if GetLastError() == ERROR_ALREADY_EXISTS {
             post_to_core(MSG_SHOW_SETTINGS);
             return 0;

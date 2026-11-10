@@ -11,11 +11,11 @@ pub const WM_APP_DEFAULTS_SET: u32 = WM_APP + 4;
 pub const WM_APP_TRAY: u32 = WM_APP + 5;
 
 /// Names for RegisterWindowMessageW.
-pub const MSG_RELOAD: PCWSTR = w!("KuroMute.Reload");
-pub const MSG_SHOW_SETTINGS: PCWSTR = w!("KuroMute.ShowSettings");
-pub const MSG_TOGGLE: PCWSTR = w!("KuroMute.Toggle");
+pub const MSG_RELOAD: PCWSTR = w!("SirahMute.Reload");
+pub const MSG_SHOW_SETTINGS: PCWSTR = w!("SirahMute.ShowSettings");
+pub const MSG_TOGGLE: PCWSTR = w!("SirahMute.Toggle");
 /// wparam: 1 = pause (unregister hotkey), 0 = resume.
 /// lparam (pause only): settings process ID to watch, 0 = unknown (core falls back to its own child).
-pub const MSG_PAUSE_HOTKEY: PCWSTR = w!("KuroMute.PauseHotkey");
+pub const MSG_PAUSE_HOTKEY: PCWSTR = w!("SirahMute.PauseHotkey");
 
-pub const WINDOW_CLASS: PCWSTR = w!("KuroMuteCore");
+pub const WINDOW_CLASS: PCWSTR = w!("SirahMuteCore");

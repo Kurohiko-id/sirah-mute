@@ -456,9 +456,9 @@ pub fn t(l: ResolvedLang, k: Key) -> &'static str {
         (SupportTopupBtn, Id) => "KurohikoTopUp.com",
         (MadeWithSlint, En) => "Made with Slint",
         (MadeWithSlint, Id) => "Dibuat dengan Slint",
-        (CoreNotRunning, En) => "Kuro Mute is not running; changes apply on its next start",
-        (CoreNotRunning, Id) => "Kuro Mute tidak jalan; perubahan dipakai saat start berikutnya",
-        (AppName, _) => "Kuro Mute & Force Mic",
+        (CoreNotRunning, En) => "Sirah Mute is not running; changes apply on its next start",
+        (CoreNotRunning, Id) => "Sirah Mute tidak jalan; perubahan dipakai saat start berikutnya",
+        (AppName, _) => "Sirah Mute",
     }
 }
 

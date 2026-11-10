@@ -34,13 +34,13 @@ fn now() -> String {
 }
 
 fn numbered(dir: &Path, n: usize) -> PathBuf {
-    dir.join(format!("kuromute.log.{n}"))
+    dir.join(format!("sirahmute.log.{n}"))
 }
 
 /// Shifts log -> .1 -> .2 ... when the log is >= max_bytes. Never panics:
 /// rename/remove failures are ignored because logging must never crash the app.
 fn rotate(dir: &Path, max_bytes: u64, keep: usize) {
-    let log = dir.join("kuromute.log");
+    let log = dir.join("sirahmute.log");
     if fs::metadata(&log).map(|m| m.len()).unwrap_or(0) < max_bytes {
         return;
     }
@@ -56,7 +56,7 @@ fn append(dir: &Path, msg: &str) {
     if let Ok(mut f) = OpenOptions::new()
         .create(true)
         .append(true)
-        .open(dir.join("kuromute.log"))
+        .open(dir.join("sirahmute.log"))
     {
         let _ = writeln!(f, "{} {}", now(), msg);
     }
@@ -106,7 +106,7 @@ mod tests {
     use std::fs;
 
     fn tmp(name: &str) -> std::path::PathBuf {
-        let d = std::env::temp_dir().join(format!("kuromute-log-{name}-{}", std::process::id()));
+        let d = std::env::temp_dir().join(format!("sirahmute-log-{name}-{}", std::process::id()));
         let _ = fs::remove_dir_all(&d);
         fs::create_dir_all(&d).unwrap();
         d
@@ -123,27 +123,27 @@ mod tests {
     #[test]
     fn rotate_shifts_files() {
         let d = tmp("shift");
-        fs::write(d.join("kuromute.log"), "0123456789").unwrap();
+        fs::write(d.join("sirahmute.log"), "0123456789").unwrap();
         for (n, c) in [(1, "a"), (2, "b"), (3, "c")] {
-            fs::write(d.join(format!("kuromute.log.{n}")), c).unwrap();
+            fs::write(d.join(format!("sirahmute.log.{n}")), c).unwrap();
         }
         rotate(&d, 5, 3);
-        assert!(!d.join("kuromute.log").exists());
+        assert!(!d.join("sirahmute.log").exists());
         assert_eq!(
-            fs::read_to_string(d.join("kuromute.log.1")).unwrap(),
+            fs::read_to_string(d.join("sirahmute.log.1")).unwrap(),
             "0123456789"
         );
-        assert_eq!(fs::read_to_string(d.join("kuromute.log.2")).unwrap(), "a");
-        assert_eq!(fs::read_to_string(d.join("kuromute.log.3")).unwrap(), "b");
-        assert!(!d.join("kuromute.log.4").exists());
+        assert_eq!(fs::read_to_string(d.join("sirahmute.log.2")).unwrap(), "a");
+        assert_eq!(fs::read_to_string(d.join("sirahmute.log.3")).unwrap(), "b");
+        assert!(!d.join("sirahmute.log.4").exists());
     }
 
     #[test]
     fn rotate_noop_when_small() {
         let d = tmp("small");
-        fs::write(d.join("kuromute.log"), "01234").unwrap();
+        fs::write(d.join("sirahmute.log"), "01234").unwrap();
         rotate(&d, 100, 3);
-        assert!(d.join("kuromute.log").exists());
-        assert!(!d.join("kuromute.log.1").exists());
+        assert!(d.join("sirahmute.log").exists());
+        assert!(!d.join("sirahmute.log.1").exists());
     }
 }

@@ -42,11 +42,11 @@ fn http_get() -> Result<Vec<u8>, String> {
     const MAX: usize = 1 << 20;
     let err = |what: &str| format!("{what}: {}", windows::core::Error::from_thread());
     unsafe {
-        let agent = w("KuroMute");
+        let agent = w("SirahMute");
         let host = w("api.github.com");
-        let path = w("/repos/Kurohiko-id/Kuro-Mute-Force-Mic-Input/releases/latest");
+        let path = w("/repos/Kurohiko-id/sirah-mute/releases/latest");
         let verb = w("GET");
-        let hdr: Vec<u16> = "User-Agent: KuroMute\r\nAccept: application/vnd.github+json"
+        let hdr: Vec<u16> = "User-Agent: SirahMute\r\nAccept: application/vnd.github+json"
             .encode_utf16()
             .collect();
 

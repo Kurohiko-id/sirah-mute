@@ -1,4 +1,4 @@
-//! Run-at-login via HKCU\...\Run value `MuteMic` (same value name as v1).
+//! Run-at-login via HKCU\...\Run value `SirahMute` (the v1 value `MuteMic` is removed).
 
 use std::path::Path;
 use windows::Win32::Foundation::{ERROR_FILE_NOT_FOUND, ERROR_SUCCESS};
@@ -9,7 +9,9 @@ use windows::Win32::System::Registry::{
 use windows::core::{Result, w};
 
 const RUN_KEY: windows::core::PCWSTR = w!("Software\\Microsoft\\Windows\\CurrentVersion\\Run");
-const VALUE: windows::core::PCWSTR = w!("MuteMic");
+const VALUE: windows::core::PCWSTR = w!("SirahMute");
+/// Run value used by v1 and pre-rename v2; removed so the old app never starts again.
+const LEGACY_VALUE: windows::core::PCWSTR = w!("MuteMic");
 
 /// Registry data for the Run value: the exe path in double quotes.
 pub fn desired_value(exe: &Path) -> String {
@@ -27,6 +29,9 @@ pub fn apply(enabled: bool) -> Result<()> {
             &mut key,
         )
         .ok()?;
+    }
+    unsafe {
+        let _ = RegDeleteValueW(key, LEGACY_VALUE);
     }
     let r = if enabled {
         std::env::current_exe()

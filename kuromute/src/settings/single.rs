@@ -5,9 +5,9 @@ use windows::Win32::UI::WindowsAndMessaging::{
 };
 use windows::core::PCWSTR;
 
-pub const SETTINGS_MUTEX: &str = r"Local\KuroMuteSettings";
+pub const SETTINGS_MUTEX: &str = r"Local\SirahMuteSettings";
 /// Slint window title; settings.slint hardcodes the same string (ui.rs tests assert equality).
-pub const WINDOW_TITLE: &str = "Kuro Mute Settings";
+pub const WINDOW_TITLE: &str = "Sirah Mute Settings";
 
 /// Holds the mutex; `None` handle = CreateMutexW failed, we run unguarded rather than never open.
 pub struct SingleGuard(Option<HANDLE>);
@@ -53,6 +53,6 @@ mod tests {
 
     #[test]
     fn mutex_name_is_local_and_stable() {
-        assert_eq!(SETTINGS_MUTEX, r"Local\KuroMuteSettings");
+        assert_eq!(SETTINGS_MUTEX, r"Local\SirahMuteSettings");
     }
 }

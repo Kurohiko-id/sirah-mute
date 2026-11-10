@@ -1,9 +1,9 @@
-# Acceptance measurement for kuromute v2 (PowerShell 5.1, no admin, no modules).
+# Acceptance measurement for Sirah Mute (PowerShell 5.1, no admin, no modules).
 # -LatencyOnly skips the process check and only reports latency from the log.
 param(
-    [string]$Exe = 'D:\dev\cargo-target\release\kuromute.exe',
+    [string]$Exe = 'D:\dev\cargo-target\release\sirahmute.exe',
     [int]$Toggle = 0,
-    [string]$Log = (Join-Path $env:APPDATA 'MuteMic\logs\kuromute.log'),
+    [string]$Log = (Join-Path $env:APPDATA 'SirahMute\logs\sirahmute.log'),
     [switch]$LatencyOnly
 )
 
@@ -46,8 +46,8 @@ if ($Toggle -gt 0) {
     Write-Host "toggled $Toggle times"
 }
 
-$p = Get-Process -Name kuromute -ErrorAction SilentlyContinue | Select-Object -First 1
-if (-not $p) { Write-Host 'kuromute is not running'; exit 1 }
+$p = Get-Process -Name sirahmute -ErrorAction SilentlyContinue | Select-Object -First 1
+if (-not $p) { Write-Host 'sirahmute is not running'; exit 1 }
 
 Add-Type -Namespace Win -Name Gui -MemberDefinition '[DllImport("user32.dll")] public static extern uint GetGuiResources(System.IntPtr h, uint flags);'
 
