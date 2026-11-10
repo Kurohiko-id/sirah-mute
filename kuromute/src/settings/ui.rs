@@ -202,24 +202,80 @@ pub fn commit(state: &RefCell<State>, w: &MainWindow) -> SaveOutcome {
 /// Window size in logical px; must match `MainWindow` in ui/settings.slint.
 const WINDOW_SIZE: (f64, f64) = (760.0, 520.0);
 
-/// Slint hands winit its fixed min/max size in physical pixels for the scale at open time and never
-/// updates them, so after a DPI change (e.g. a 125% and a 100% monitor) Windows clamps the window to
-/// the old pixel size; dragging across the edge can then flip DPI back and forth and the window
-/// ends up oversized. Re-pin the limits in logical pixels, which winit converts at the current scale.
+/// Runs after winit's own WM_DPICHANGED handling and moves the window to the rect Windows suggests.
+/// winit picks its own rect (keeping the cursor at the same spot), which while dragging by the left
+/// part of the title bar across a 125%/100% edge lands the window mostly back on the old monitor,
+/// so DPI flips back and forth mid-drag. Windows' suggested rect is built not to do that.
+unsafe extern "system" fn dpi_subclass(
+    h: windows::Win32::Foundation::HWND,
+    m: u32,
+    wp: WPARAM,
+    lp: LPARAM,
+    _id: usize,
+    _data: usize,
+) -> windows::Win32::Foundation::LRESULT {
+    use windows::Win32::Foundation::RECT;
+    use windows::Win32::UI::Shell::DefSubclassProc;
+    use windows::Win32::UI::WindowsAndMessaging::{
+        SWP_NOACTIVATE, SWP_NOZORDER, SetWindowPos, WM_DPICHANGED,
+    };
+    let res = unsafe { DefSubclassProc(h, m, wp, lp) };
+    if m == WM_DPICHANGED {
+        let r = unsafe { *(lp.0 as *const RECT) };
+        let _ = unsafe {
+            SetWindowPos(
+                h,
+                None,
+                r.left,
+                r.top,
+                r.right - r.left,
+                r.bottom - r.top,
+                SWP_NOZORDER | SWP_NOACTIVATE,
+            )
+        };
+    }
+    res
+}
+
+/// Keeps the window its designed size across monitors with different scaling (e.g. 125% and 100%):
+/// takes Windows' suggested rect on DPI change (see `dpi_subclass`), and after each scale or size
+/// change, once Slint has handled it, puts the window back to its logical size if it drifted.
 fn keep_size_across_dpi(w: &MainWindow) {
     use slint::winit_030::{EventResult, WinitWindowAccessor, winit};
-    let pin = |win: &slint::Window| {
-        win.with_winit_window(|ww| {
-            let size = winit::dpi::LogicalSize::new(WINDOW_SIZE.0, WINDOW_SIZE.1);
-            ww.set_min_inner_size(Some(size));
-            ww.set_max_inner_size(Some(size));
-        });
-    };
-    let mut pinned = false;
+    use winit::event::WindowEvent as E;
+    use winit::raw_window_handle::{HasWindowHandle, RawWindowHandle};
+    let weak = w.as_weak();
+    let mut hooked = false;
     w.window().on_winit_window_event(move |win, ev| {
-        if !pinned || matches!(ev, winit::event::WindowEvent::ScaleFactorChanged { .. }) {
-            pinned = true;
-            pin(win);
+        if !hooked {
+            hooked = true;
+            win.with_winit_window(|ww| {
+                if let Ok(RawWindowHandle::Win32(h)) = ww.window_handle().map(|x| x.as_raw()) {
+                    let hwnd = windows::Win32::Foundation::HWND(h.hwnd.get() as *mut _);
+                    let ok = unsafe {
+                        windows::Win32::UI::Shell::SetWindowSubclass(hwnd, Some(dpi_subclass), 1, 0)
+                    };
+                    if !ok.as_bool() {
+                        crate::log!("settings: DPI subclass failed");
+                    }
+                }
+            });
+        }
+        if matches!(ev, E::ScaleFactorChanged { .. } | E::Resized(_)) {
+            let weak = weak.clone();
+            slint::Timer::single_shot(std::time::Duration::from_millis(50), move || {
+                let Some(w) = weak.upgrade() else { return };
+                w.window().with_winit_window(|ww| {
+                    let want = winit::dpi::LogicalSize::new(WINDOW_SIZE.0, WINDOW_SIZE.1)
+                        .to_physical::<u32>(ww.scale_factor());
+                    let have = ww.inner_size();
+                    // 1 px slack for rounding, so a correct window never re-triggers itself.
+                    if have.width.abs_diff(want.width) > 1 || have.height.abs_diff(want.height) > 1 {
+                        crate::log!("settings: size {have:?} -> {want:?} after DPI change");
+                        let _ = ww.request_inner_size(want);
+                    }
+                });
+            });
         }
         EventResult::Propagate
     });
