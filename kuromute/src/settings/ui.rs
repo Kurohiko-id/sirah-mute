@@ -202,10 +202,17 @@ pub fn commit(state: &RefCell<State>, w: &MainWindow) -> SaveOutcome {
 /// Window size in logical px; must match `MainWindow` in ui/settings.slint.
 const WINDOW_SIZE: (f64, f64) = (760.0, 520.0);
 
-/// Runs after winit's own WM_DPICHANGED handling and moves the window to the rect Windows suggests.
-/// winit picks its own rect (keeping the cursor at the same spot), which while dragging by the left
-/// part of the title bar across a 125%/100% edge lands the window mostly back on the old monitor,
-/// so DPI flips back and forth mid-drag. Windows' suggested rect is built not to do that.
+thread_local! {
+    /// Windows' suggested rect while winit handles a WM_DPICHANGED (see `dpi_subclass`).
+    static DPI_RECT: std::cell::Cell<Option<windows::Win32::Foundation::RECT>> =
+        const { std::cell::Cell::new(None) };
+}
+
+/// While winit handles WM_DPICHANGED, steer its SetWindowPos to the rect Windows suggests.
+/// winit computes its own rect (keeping the cursor at the same spot); dragging by the left part of
+/// the title bar toward a monitor on the left puts that rect mostly back on the old monitor, Windows
+/// fires a second DPI change mid-handler, and the size gets scaled twice (seen as a tiny window on
+/// the 100% monitor and a huge one back on the 125% one). Windows' suggested rect avoids that.
 unsafe extern "system" fn dpi_subclass(
     h: windows::Win32::Foundation::HWND,
     m: u32,
@@ -217,28 +224,32 @@ unsafe extern "system" fn dpi_subclass(
     use windows::Win32::Foundation::RECT;
     use windows::Win32::UI::Shell::DefSubclassProc;
     use windows::Win32::UI::WindowsAndMessaging::{
-        SWP_NOACTIVATE, SWP_NOZORDER, SetWindowPos, WM_DPICHANGED,
+        SWP_NOMOVE, SWP_NOSIZE, WINDOWPOS, WM_DPICHANGED, WM_WINDOWPOSCHANGING,
     };
-    let res = unsafe { DefSubclassProc(h, m, wp, lp) };
-    if m == WM_DPICHANGED {
-        let r = unsafe { *(lp.0 as *const RECT) };
-        let _ = unsafe {
-            SetWindowPos(
-                h,
-                None,
-                r.left,
-                r.top,
-                r.right - r.left,
-                r.bottom - r.top,
-                SWP_NOZORDER | SWP_NOACTIVATE,
-            )
-        };
+    match m {
+        WM_DPICHANGED => {
+            DPI_RECT.with(|c| c.set(Some(unsafe { *(lp.0 as *const RECT) })));
+            let res = unsafe { DefSubclassProc(h, m, wp, lp) };
+            DPI_RECT.with(|c| c.set(None));
+            res
+        }
+        WM_WINDOWPOSCHANGING => {
+            if let Some(r) = DPI_RECT.with(|c| c.get()) {
+                let pos = unsafe { &mut *(lp.0 as *mut WINDOWPOS) };
+                pos.x = r.left;
+                pos.y = r.top;
+                pos.cx = r.right - r.left;
+                pos.cy = r.bottom - r.top;
+                pos.flags &= !(SWP_NOMOVE | SWP_NOSIZE);
+            }
+            unsafe { DefSubclassProc(h, m, wp, lp) }
+        }
+        _ => unsafe { DefSubclassProc(h, m, wp, lp) },
     }
-    res
 }
 
 /// Keeps the window its designed size across monitors with different scaling (e.g. 125% and 100%):
-/// takes Windows' suggested rect on DPI change (see `dpi_subclass`), and after each scale or size
+/// moves to Windows' suggested rect on DPI change (see `dpi_subclass`), and after each scale or size
 /// change, once Slint has handled it, puts the window back to its logical size if it drifted.
 fn keep_size_across_dpi(w: &MainWindow) {
     use slint::winit_030::{EventResult, WinitWindowAccessor, winit};
