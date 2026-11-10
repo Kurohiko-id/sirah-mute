@@ -97,12 +97,22 @@ Tes manual user: belum
   - Top Up Games: https://kurohikotopup.com
 - [x] Teks EN/ID
 
+## Bagian 2f: Popup Pill + ganti nama jadi Sirah Mute ✅ (2026-11-10)
+
+- [x] Gaya popup Card / Pill (dropdown Gaya di Popup). Pill: ikon mic dicoret merah, "Mic mute", jam di kanan
+- [x] Dukung developer dipindah ke atas Updates & support
+- [x] Ganti nama: `sirahmute.exe`, data `%APPDATA%\SirahMute` (config.json disalin sekali dari `MuteMic`), Run value `SirahMute` (`MuteMic` dihapus), link update/issue ke `Kurohiko-id/sirah-mute`
+- [ ] Bikin repo baru `sirah-mute` (About: "Never talk into a muted mic again."), push. Butuh OK user
+- [ ] Repo lama: README pindah + 1 rilis terakhir yang nunjuk repo baru (app lama cek update ke sana), lalu archive
+
+Tes manual user: belum (cek ikon mic dicoret di Pill)
+
 ## Bagian 3: Distribusi ⏳ (belum mulai)
 
 - [ ] Installer per-user (Inno Setup, AppId baru): matikan app lama dan watcher Super Lite, ambil alih Run key, shortcut Start Menu
 - [ ] Zip portable
 - [ ] GitHub Actions: build x64, upload installer dan zip ke Release
-- [ ] README: cara lewati SmartScreen (rilis tanpa code signing)
+- [ ] README: cara lewati SmartScreen (rilis tanpa code signing), cerita batuk (EN), banner yang nunjukin app kerja
 
 ## Nanti (setelah inti stabil)
 
