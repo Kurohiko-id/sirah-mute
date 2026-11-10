@@ -104,8 +104,9 @@ Tes manual user: belum
 - [x] Ganti nama: `sirahmute.exe`, data `%APPDATA%\SirahMute` (config.json disalin sekali dari `MuteMic`), Run value `SirahMute` (`MuteMic` dihapus), link update/issue ke `Kurohiko-id/sirah-mute`
 - [x] Logo "Belah" (sirah = merah, bahasa Minang): kapsul mic merah terbelah miring 45°, aset di `kuromute/assets/`. Tray: kapsul abu-abu = unmute, merah = mute, badge kuning = mic hilang
 - [ ] Lockup logo + tulisan "Sirah Mute" (butuh font OFL di-outline), dikerjain bareng banner
-- [ ] Bikin repo baru `sirah-mute` (About: "Never talk into a muted mic again."), push. Butuh OK user
-- [ ] Repo lama: README pindah + 1 rilis terakhir yang nunjuk repo baru (app lama cek update ke sana), lalu archive
+- [x] Repo baru https://github.com/Kurohiko-id/sirah-mute (2026-11-10): file v1 C# dihapus dari main, README EN + `README.id.md`, banner `assets/banner.png` (sumber `assets/banner.html`), remote `origin` = repo baru, `legacy` = repo lama
+- [x] Repo lama: README pindah, rilis v1.3.0 "moved" (app v1 dapat notif update ke sana), di-archive
+- [ ] Upload `assets/social-preview.png` manual di Settings → Social preview repo baru (GitHub nggak punya API-nya)
 
 Tes manual user: belum (cek ikon mic dicoret di Pill)
 
