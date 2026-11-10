@@ -515,16 +515,16 @@ pub struct Indicators {
     fallback: bool,
     strips_visible: bool,
     /// Start of the running opening pulse; `None` when idle.
-    pub pulse_start: Option<Instant>,
+    pulse_start: Option<Instant>,
     /// Current global alpha of the strips (255 when idle).
-    pub alpha: u8,
+    alpha: u8,
     /// Kept after `rebuild` so the clock slot can be redrawn on ticks.
     renderer: Option<Renderer>,
     lang: ResolvedLang,
     popup_visible: bool,
     /// Start of the current mute. Survives `rebuild`/`destroy` (display change,
     /// settings reload) so the clock keeps counting; cleared on unmute.
-    pub muted_since: Option<Instant>,
+    muted_since: Option<Instant>,
 }
 
 impl Indicators {
