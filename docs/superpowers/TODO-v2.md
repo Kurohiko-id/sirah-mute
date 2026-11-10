@@ -63,7 +63,7 @@ Rencana kerja 2b–2e: [plans/2026-11-10-v2-indicators-extras.md](plans/2026-11-
 - [x] Glow: strip dilebarin ke dalam, bitmap gradasi alpha per-pixel via `UpdateLayeredWindow` (renderer popup), dirender sekali per `rebuild`
 - [x] Pulse: 3 kedip (~1,6 dtk) waktu baru mute, cuma ganti alpha global lewat `UpdateLayeredWindow`, timer mati setelahnya. Jalur show tetap cuma buka cloak (latency nggak berubah)
 - [x] Config `border_style` + default untuk config lama, dropdown di Penanda, i18n EN/ID
-- [x] Ukur ulang latency dan RAM (2026-11-10, exe release 14 MB, border Glow): core RAM 3,49 MB (baseline 2,44 MB), latency run baru p50 2 ms / p95 3 ms, n=20 (baseline p50 4 ms / p95 12 ms; semua sampel log p50 2 / p95 9, n=280). GDI 14 / USER 21 sebelum dan sesudah 20 toggle, nggak bocor.
+- [x] Ukur ulang latency dan RAM (2026-11-10, exe release 14 MB, border Glow): core RAM 3,49 MB (baseline 2,44 MB), latency run baru p50 2 ms / p95 3 ms, n=20 (baseline p50 4 ms / p95 12 ms; semua sampel log p50 2 / p95 9, n=280). GDI 14 / USER 21 sebelum dan sesudah 20 toggle, nggak bocor. (popup off di config user; jalur clock belum terukur)
 
 Tes manual user: belum
 
@@ -79,12 +79,16 @@ Rencana:
 - [x] Kalau nggak ada app lain yang buka stream di mic sumber, meter 0 → fitur diam (tulis di keterangan UI)
 - [x] Ambang/sensitivitas: konstanta 0,015, ditinjau lagi setelah dipakai harian
 
+Tes manual user: belum
+
 ## Bagian 2d: Timer durasi mute di popup ✅
 
 Permintaan user (2026-11-10): popup nampilin udah berapa lama mute, tampil terus selama mute, reset tiap mute baru.
 - [x] Popup: "Mic mute · 0:42" (m:ss, lewat sejam h:mm:ss). Render ulang bitmap popup 1x/detik selama mute dan popup kelihatan; timer mati waktu unmute
 - [x] Tampil terus = opsi "Tetap tampil selama mute" yang udah ada
 - [x] Mulai dihitung dari event mute (termasuk mute dari luar app); unmute lalu mute lagi = reset ke 0:00
+
+Tes manual user: belum
 
 ## Bagian 2e: Support dev di tab Umum ✅
 
