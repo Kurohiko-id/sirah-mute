@@ -102,6 +102,8 @@ Tes manual user: belum
 - [x] Gaya popup Card / Pill (dropdown Gaya di Popup). Pill: ikon mic dicoret merah, "Mic mute", jam di kanan
 - [x] Dukung developer dipindah ke atas Updates & support
 - [x] Ganti nama: `sirahmute.exe`, data `%APPDATA%\SirahMute` (config.json disalin sekali dari `MuteMic`), Run value `SirahMute` (`MuteMic` dihapus), link update/issue ke `Kurohiko-id/sirah-mute`
+- [x] Logo "Lampu Sirah" (sirah = merah, bahasa Minang): lingkaran merah + mulut pill putih, aset di `kuromute/assets/`. Tray: lampu abu-abu = unmute, merah = mute, badge kuning = mic hilang
+- [ ] Lockup logo + tulisan "Sirah Mute" (butuh font OFL di-outline), dikerjain bareng banner
 - [ ] Bikin repo baru `sirah-mute` (About: "Never talk into a muted mic again."), push. Butuh OK user
 - [ ] Repo lama: README pindah + 1 rilis terakhir yang nunjuk repo baru (app lama cek update ke sana), lalu archive
 
