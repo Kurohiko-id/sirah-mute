@@ -31,9 +31,7 @@ Gw Kurohiko. Gw udah batuk bertahun-tahun, jadi pas stream gw sering banget penc
 
 ## Install
 
-Unduh rilis terbaru dari [Releases](../../releases) lalu jalankan.
-
-Build pertama Sirah Mute lagi disiapin. Sampai rilisnya ada, build dari source (lihat di bawah).
+Unduh **SirahMute-Setup.exe** (installer per-user, tanpa admin) atau zip portable dari [Releases](../../releases/latest).
 
 > **Windows SmartScreen:** rilis belum di-code-sign, jadi Windows bisa nampilin "Windows protected your PC". Klik **More info → Run anyway**.
 

@@ -31,9 +31,7 @@ I'm Kurohiko. I've had a cough for years, so on stream I hit mute a lot. The pro
 
 ## Install
 
-Download the latest release from [Releases](../../releases) and run it.
-
-The first Sirah Mute build is being packaged right now. Until it's up, build from source (below).
+Download **SirahMute-Setup.exe** (per-user installer, no admin) or the portable zip from [Releases](../../releases/latest).
 
 > **Windows SmartScreen:** releases aren't code-signed yet, so Windows may say "Windows protected your PC". Click **More info → Run anyway**.
 
