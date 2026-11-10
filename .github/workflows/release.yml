@@ -1,0 +1,52 @@
+# Push a tag like v2.0.0 -> builds, tests, packages installer + portable zip, opens a DRAFT release.
+# Review the draft notes on GitHub, then publish.
+name: release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      VERSION: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Tag must match Cargo.toml version
+        run: |
+          $v = $env:VERSION.TrimStart('v')
+          $cargo = (Select-String -Path kuromute/Cargo.toml -Pattern '^version = "(.+)"').Matches[0].Groups[1].Value
+          if ($v -ne $cargo) { throw "tag $env:VERSION does not match Cargo.toml version $cargo" }
+          "VER=$v" >> $env:GITHUB_ENV
+
+      - name: Test
+        working-directory: kuromute
+        run: cargo test --release --locked
+
+      - name: Build
+        working-directory: kuromute
+        run: cargo build --release --locked
+
+      - name: Installer
+        run: |
+          choco install innosetup -y --no-progress
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" /Q "/DMyAppVersion=$env:VER" "/DExePath=$pwd\kuromute\target\release\sirahmute.exe" installer\sirah-mute.iss
+          if ($LASTEXITCODE) { throw "ISCC failed" }
+
+      - name: Portable zip
+        run: Compress-Archive -Path kuromute\target\release\sirahmute.exe -DestinationPath "SirahMute-$env:VER-portable.zip"
+
+      - name: Draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create $env:VERSION --draft --title "Sirah Mute $env:VER" --generate-notes `
+            "installer\Output\SirahMute-Setup-$env:VER.exe" "SirahMute-$env:VER-portable.zip"
