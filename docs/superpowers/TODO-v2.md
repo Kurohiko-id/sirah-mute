@@ -118,6 +118,7 @@ Tes manual user: belum (cek ikon mic dicoret di Pill)
 - [x] Tes installer manual user: timpa live install, F13 aman, uninstall bersih (dicek), halaman Finish pakai tombol besar Support/Top Up + panel kiri Sirah
 - [x] Tag `v2.0.0` di-push, CI hijau (5 mnt), draft berisi installer + zip, notes EN/ID; README diupdate
 - [x] Mode Notify sekarang popup sendiri (tembus Do Not Disturb): Switch back / Keep for now / Remind in 15 min (`src/prompt.rs`), dites user OK; tag v2.0.0 dibuat ulang, CI hijau
+- [x] Fix: jendela Settings rusak ukurannya waktu di-drag antar monitor beda skala (125%/100%), terutama ke monitor kiri. winit naruh jendela pakai rumus kursornya sendiri sehingga DPI ganti dua kali; sekarang SetWindowPos winit dibelokkan ke rect saran Windows + koreksi ukuran 50 ms (`settings/ui.rs`). Dites drag otomatis dua arah: ukuran benar. Tag v2.0.0 dibuat ulang di bffbbbb, CI hijau
 - [ ] User klik **Publish** di draft, lalu post promo `assets/promo/`
 - [x] Gambar promo 1:1 di `assets/promo/` (4 slide EN/ID, slide 4 = guard), **lokal saja** (di-.gitignore, nggak ke GitHub); post setelah rilis ada
 
