@@ -40,6 +40,8 @@ SolidCompression=yes
 OutputDir=Output
 OutputBaseFilename=SirahMute-Setup-{#MyAppVersion}
 WizardStyle=modern
+WizardImageFile=art\side-100.png,art\side-125.png,art\side-150.png,art\side-175.png,art\side-200.png,art\side-250.png,art\side-300.png
+WizardSmallImageFile=art\small-100.png,art\small-125.png,art\small-150.png,art\small-175.png,art\small-200.png,art\small-250.png,art\small-300.png
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 MinVersion=10.0
@@ -52,6 +54,8 @@ Name: "desktopicon"; Description: "Create a &desktop shortcut"; Flags: unchecked
 
 [Files]
 Source: "{#ExePath}"; DestDir: "{app}"; Flags: ignoreversion
+Source: "art\support-*.png"; Flags: dontcopy
+Source: "art\topup-*.png"; Flags: dontcopy
 
 [Icons]
 Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
@@ -116,34 +120,50 @@ begin
   ShellExec('open', 'https://kurohikotopup.com', '', '', SW_SHOWNORMAL, ewNoWait, Code);
 end;
 
-function AddLink(const Caption: String; Top: Integer; Handler: TNotifyEvent): TNewStaticText;
+{ Picks the pre-rendered button PNG closest above the current display scaling. }
+function ArtSuffix: String;
+var
+  S: Integer;
 begin
-  Result := TNewStaticText.Create(WizardForm);
+  S := ScaleX(100);
+  if S <= 100 then Result := '100'
+  else if S <= 150 then Result := '150'
+  else if S <= 200 then Result := '200'
+  else Result := '300';
+end;
+
+function AddButton(const Name, Caption: String; Top, W, H: Integer; Handler: TNotifyEvent): TBitmapButton;
+var
+  F: String;
+begin
+  F := Name + '-' + ArtSuffix + '.png';
+  ExtractTemporaryFile(F);
+  Result := TBitmapButton.Create(WizardForm);
   Result.Parent := WizardForm.FinishedPage;
   Result.Caption := Caption;
-  Result.Left := WizardForm.FinishedLabel.Left;
+  Result.Hint := Caption;
+  Result.PngImage.LoadFromFile(ExpandConstant('{tmp}\') + F);
+  Result.Stretch := True;
+  Result.Left := WizardForm.FinishedLabel.Left - ScaleX(2);
   Result.Top := Top;
+  Result.Width := W;
+  Result.Height := H;
   Result.Cursor := crHand;
-  Result.Font.Color := clHotLight;
-  Result.Font.Style := [fsUnderline];
   Result.OnClick := Handler;
 end;
 
-{ Two plain links at the bottom of the Finish page; nothing opens unless the user clicks. }
+{ Two big buttons at the bottom of the Finish page; nothing opens unless the user clicks. }
 procedure InitializeWizard;
 var
-  Head: TNewStaticText;
-  Bottom: Integer;
+  W, H, Bottom: Integer;
 begin
-  Bottom := WizardForm.FinishedPage.Height;
-  Head := TNewStaticText.Create(WizardForm);
-  Head.Parent := WizardForm.FinishedPage;
-  Head.Caption := 'Like Sirah Mute?';
-  Head.Font.Style := [fsBold];
-  Head.Left := WizardForm.FinishedLabel.Left;
-  Head.Top := Bottom - ScaleY(66);
-  AddLink('Support the developer at kurohiko.id', Bottom - ScaleY(44), @OpenSupport);
-  AddLink('Top up your games at KurohikoTopUp.com', Bottom - ScaleY(22), @OpenTopUp);
+  { TBitmapButton keeps a 2px focus margin around the image. }
+  W := WizardForm.FinishedPage.Width - WizardForm.FinishedLabel.Left - ScaleX(16) + ScaleX(4);
+  H := (W - ScaleX(4)) * 58 div 440 + ScaleY(4);
+  Bottom := WizardForm.FinishedPage.Height - ScaleY(8);
+  WizardForm.RunList.Height := ScaleY(28);
+  AddButton('topup', 'Top up your games at KurohikoTopUp.com', Bottom - H, W, H, @OpenTopUp);
+  AddButton('support', 'Support the developer at kurohiko.id', Bottom - 2 * H - ScaleY(6), W, H, @OpenSupport);
 end;
 
 function LegacyInstalled: Boolean;

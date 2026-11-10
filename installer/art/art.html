@@ -1,0 +1,29 @@
+<!-- Installer art. Rendered to PNG by installer/art/render.sh (headless Chrome, transparent background).
+     #side  : wizard side panel, 164x314 logical
+     #small : top-right logo on inner pages, 55x55 logical
+     #support / #topup : Finish-page buttons, 440x58 logical -->
+<style>
+:root{--red:#E5484D;--ink:#0E0F12}
+*{box-sizing:border-box;margin:0}
+html,body{background:transparent;overflow:hidden;font-family:"Segoe UI Variable Text","Segoe UI",sans-serif}
+.v{display:none}
+#side{width:164px;height:314px;background:radial-gradient(160px 190px at 50% 45%,#3a1518 0%,transparent 75%),var(--ink);color:#ECEDEF;
+ flex-direction:column;align-items:center;justify-content:center;gap:12px}
+#side svg{width:72px;height:72px}
+#side b{font-size:17px;font-weight:700;letter-spacing:-.3px}
+#side span{font-size:12px;color:#B8BDC6;text-align:center;max-width:130px;line-height:1.35}
+#small{width:55px;height:55px;align-items:center;justify-content:center}
+#small svg{width:46px;height:46px}
+.btn{width:440px;height:58px;border-radius:8px;align-items:center;gap:14px;padding:0 18px;font-size:15px;font-weight:600;color:#fff}
+.btn small{display:block;font-weight:400;font-size:12.5px;opacity:.8}
+.btn .go{margin-left:auto;font-size:14px}
+.ic{font-family:"Segoe Fluent Icons","Segoe MDL2 Assets";font-size:20px}
+#support{background:var(--red)}
+#topup{background:#16171b}
+</style>
+<svg width="0" height="0" style="position:absolute"><defs><symbol id="mk" viewBox="0 0 256 256"><path fill="#E5484D" d="M68,173.86 L68,72 A60,60 0 0 1 185.83,56.03 Z"/><path fill="#E5484D" d="M188,82.14 L188,184 A60,60 0 0 1 70.17,199.97 Z"/></symbol></defs></svg>
+<div id="side" class="v"><svg><use href="#mk"/></svg><b>Sirah Mute</b><span>Never talk into a muted mic again.</span></div>
+<div id="small" class="v"><svg><use href="#mk"/></svg></div>
+<div id="support" class="v btn"><span class="ic">&#xEB51;</span><div>Support the developer<small>kurohiko.id</small></div><span class="go">Open →</span></div>
+<div id="topup" class="v btn"><span class="ic">&#xE7FC;</span><div>Top up your games<small>KurohikoTopUp.com</small></div><span class="go">Open →</span></div>
+<script>document.getElementById(location.hash.slice(1)).style.display='flex'</script>
