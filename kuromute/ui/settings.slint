@@ -459,6 +459,15 @@ export component MainWindow inherits Window {
                         label: Strings.version-label;
                         Text { text: root.app-version; color: Palette.text-dim; vertical-alignment: center; }
                     }
+                    SectionTitle { text: Strings.sec-support; }
+                    Row {
+                        label: Strings.support-saweria;
+                        Button { text: Strings.support-saweria-btn; clicked => { root.support-saweria-clicked(); } }
+                    }
+                    Row {
+                        label: Strings.support-topup;
+                        Button { text: Strings.support-topup-btn; clicked => { root.support-topup-clicked(); } }
+                    }
                     SectionTitle { text: Strings.sec-updates; }
                     Row {
                         label: root.upd-text;
@@ -472,15 +481,6 @@ export component MainWindow inherits Window {
                     Row {
                         label: Strings.bug-label;
                         Button { text: Strings.bug-btn; clicked => { root.report-bug-clicked(); } }
-                    }
-                    SectionTitle { text: Strings.sec-support; }
-                    Row {
-                        label: Strings.support-saweria;
-                        Button { text: Strings.support-saweria-btn; clicked => { root.support-saweria-clicked(); } }
-                    }
-                    Row {
-                        label: Strings.support-topup;
-                        Button { text: Strings.support-topup-btn; clicked => { root.support-topup-clicked(); } }
                     }
                     Note { text: Strings.made-with-slint; color: Palette.text-dim; horizontal-alignment: center; }
                 }
