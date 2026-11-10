@@ -102,6 +102,50 @@ begin
   Result := '';
 end;
 
+procedure OpenSupport(Sender: TObject);
+var
+  Code: Integer;
+begin
+  ShellExec('open', 'https://kurohiko.id', '', '', SW_SHOWNORMAL, ewNoWait, Code);
+end;
+
+procedure OpenTopUp(Sender: TObject);
+var
+  Code: Integer;
+begin
+  ShellExec('open', 'https://kurohikotopup.com', '', '', SW_SHOWNORMAL, ewNoWait, Code);
+end;
+
+function AddLink(const Caption: String; Top: Integer; Handler: TNotifyEvent): TNewStaticText;
+begin
+  Result := TNewStaticText.Create(WizardForm);
+  Result.Parent := WizardForm.FinishedPage;
+  Result.Caption := Caption;
+  Result.Left := WizardForm.FinishedLabel.Left;
+  Result.Top := Top;
+  Result.Cursor := crHand;
+  Result.Font.Color := clHotLight;
+  Result.Font.Style := [fsUnderline];
+  Result.OnClick := Handler;
+end;
+
+{ Two plain links at the bottom of the Finish page; nothing opens unless the user clicks. }
+procedure InitializeWizard;
+var
+  Head: TNewStaticText;
+  Bottom: Integer;
+begin
+  Bottom := WizardForm.FinishedPage.Height;
+  Head := TNewStaticText.Create(WizardForm);
+  Head.Parent := WizardForm.FinishedPage;
+  Head.Caption := 'Like Sirah Mute?';
+  Head.Font.Style := [fsBold];
+  Head.Left := WizardForm.FinishedLabel.Left;
+  Head.Top := Bottom - ScaleY(66);
+  AddLink('Support the developer at kurohiko.id', Bottom - ScaleY(44), @OpenSupport);
+  AddLink('Top up your games at KurohikoTopUp.com', Bottom - ScaleY(22), @OpenTopUp);
+end;
+
 function LegacyInstalled: Boolean;
 var
   Key: String;
