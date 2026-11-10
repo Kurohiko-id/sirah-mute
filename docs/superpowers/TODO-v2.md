@@ -1,7 +1,7 @@
 # Kuro Mute v2 (Rust): status & to-do
 
 Spec: [specs/2026-11-09-rust-rewrite-design.md](specs/2026-11-09-rust-rewrite-design.md)
-Branch: `main` (bagian 1 udah di-merge) · Crate: `kuromute/`
+Branch: `main` (bagian 1–2e udah di-merge) · Crate: `kuromute/`
 Terakhir di-update: 2026-11-10
 
 ## Bagian 1: Core tray ✅ (selesai, dipakai harian)
@@ -39,7 +39,7 @@ Hasil tes langsung di PC user (2026-11-09):
 - [ ] **Tes di game** (borderless dan fullscreen): cek hotkey nggak bikin stutter dan border kelihatan. Nunggu user.
 - [x] Merge `v2-rust` ke `main` (2026-11-09)
 
-## Bagian 2: Jendela settings ✅ (selesai di branch `v2-settings`, dites manual user 2026-11-09)
+## Bagian 2: Jendela settings ✅ (dites manual user 2026-11-09, `v2-settings` di-merge ke `main` 2026-11-10)
 
 - [x] Brainstorm detail → desain: [specs/2026-11-09-v2-settings-design.md](specs/2026-11-09-v2-settings-design.md)
 - [x] Mockup klik-able disetujui user (2026-11-09): https://claude.ai/code/artifact/05e262d6-77f3-43e4-a208-b3d6f618b5c9
@@ -54,7 +54,7 @@ Hasil tes langsung di PC user (2026-11-09):
 - [x] Ukur (2026-11-09, `tools/measure.ps1`, exe release 14 MB): core RAM 2,44 MB, latency p50 4 ms / p95 12 ms. Tetap satu exe.
 - [ ] Polish ditunda: error merah tetap bahasa lama sampai simpan berikutnya; tombol media cuma lewat dropdown (Rekam tidak tangkap consumer HID); ukuran exe bisa dikecilkan (profil release lto/strip).
 
-## Bagian 2b: Border glow + pulse ✅ (sebelum merge `v2-settings`)
+## Bagian 2b: Border glow + pulse ✅
 
 Rencana kerja 2b–2e: [plans/2026-11-10-v2-indicators-extras.md](plans/2026-11-10-v2-indicators-extras.md) (7 task)
 
