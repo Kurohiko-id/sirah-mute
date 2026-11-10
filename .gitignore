@@ -6,3 +6,6 @@ Output/
 *.user
 .superpowers/
 kuromute/target/
+
+# Promo images stay local (not published)
+assets/promo/
