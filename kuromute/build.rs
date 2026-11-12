@@ -3,7 +3,10 @@ fn main() {
     let mut res = winresource::WindowsResource::new();
     res.set_icon("assets/sirah.ico")
         .set("ProductName", "Sirah Mute")
-        .set("FileDescription", "Sirah Mute: never talk into a muted mic again")
+        .set(
+            "FileDescription",
+            "Sirah Mute: never talk into a muted mic again",
+        )
         .set("CompanyName", "Kurohiko")
         .set("LegalCopyright", "Copyright (c) 2026 Kurohiko")
         .set("ProductVersion", env!("CARGO_PKG_VERSION"))

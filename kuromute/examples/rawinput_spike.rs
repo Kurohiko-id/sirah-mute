@@ -51,8 +51,18 @@ fn main() -> windows::core::Result<()> {
         RegisterClassW(&wc);
         // top-level, never shown
         let hwnd = CreateWindowExW(
-            WINDOW_EX_STYLE::default(), w!("KuroSpike"), w!("KuroSpike"),
-            WS_OVERLAPPED, 0, 0, 0, 0, None, None, Some(hi.into()), None,
+            WINDOW_EX_STYLE::default(),
+            w!("KuroSpike"),
+            w!("KuroSpike"),
+            WS_OVERLAPPED,
+            0,
+            0,
+            0,
+            0,
+            None,
+            None,
+            Some(hi.into()),
+            None,
         )?;
         let rid = [RAWINPUTDEVICE {
             usUsagePage: 0x01,

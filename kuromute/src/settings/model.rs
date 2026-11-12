@@ -42,7 +42,8 @@ impl Debouncer {
     }
 
     pub fn ready(&self, now_ms: u64) -> bool {
-        self.last.is_some_and(|l| now_ms.saturating_sub(l) >= self.ms)
+        self.last
+            .is_some_and(|l| now_ms.saturating_sub(l) >= self.ms)
     }
 }
 

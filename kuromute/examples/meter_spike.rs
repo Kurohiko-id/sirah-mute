@@ -20,15 +20,18 @@ fn main() -> windows::core::Result<()> {
         let Some(idx) = arg else {
             for i in 0..coll.GetCount()? {
                 let d = coll.Item(i)?;
-                let name = d.OpenPropertyStore(STGM_READ)?.GetValue(&PKEY_Device_FriendlyName)?;
+                let name = d
+                    .OpenPropertyStore(STGM_READ)?
+                    .GetValue(&PKEY_Device_FriendlyName)?;
                 println!("{i}: {name}");
             }
             return Ok(());
         };
         let dev = coll.Item(idx)?;
         let mute_idx = std::env::args().nth(2).and_then(|s| s.parse::<u32>().ok());
-        let vol: IAudioEndpointVolume =
-            coll.Item(mute_idx.unwrap_or(idx))?.Activate(CLSCTX_ALL, None)?;
+        let vol: IAudioEndpointVolume = coll
+            .Item(mute_idx.unwrap_or(idx))?
+            .Activate(CLSCTX_ALL, None)?;
         let meter: IAudioMeterInformation = dev.Activate(CLSCTX_ALL, None)?;
         let client: IAudioClient = dev.Activate(CLSCTX_ALL, None)?;
         let fmt = client.GetMixFormat()?;
