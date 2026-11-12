@@ -283,7 +283,7 @@ pub fn t(l: ResolvedLang, k: Key) -> &'static str {
         (MicDisconnected, En) => "Microphone not connected",
         (MicDisconnected, Id) => "Mikrofon tidak terhubung",
         (NoMicChosen, En) => "No microphone chosen — open Settings",
-        (NoMicChosen, Id) => "Belum pilih mikrofon — buka Settings",
+        (NoMicChosen, Id) => "Belum pilih mikrofon — buka Pengaturan",
         (MenuSettings, En) => "Settings…",
         (MenuSettings, Id) => "Pengaturan…",
         (MenuGuard, En) => "Guard devices",
