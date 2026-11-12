@@ -24,7 +24,7 @@ I'm Kurohiko. I've had a cough for years, so on stream I hit mute a lot. The pro
 - **Red screen border** while muted. Solid or Glow, adjustable thickness, with a short pulse when you mute.
 - **Popup with a mute timer**: `Mic mute 0:42`. Pill or Card style, any corner, any size, and it can stay up the whole time you're muted.
 - **Talk-while-muted warning**: reads your physical mic's level and pulses the border (optionally beeps) when you speak while muted. Works with setups like Wave Link where you mute a virtual mic.
-- **Click the pill to unmute**: the red popup takes clicks (Pill style). It is clickable while visible; turn on "keep showing while muted" to keep it clickable. The border still lets clicks through to your game.
+- **Click the pill to unmute**: the red popup takes clicks (Pill style). It is clickable while visible; turn on "Keep popup while muted" to keep it clickable all the time. The border still lets clicks through to your game.
 - **Hold to cough**: off by default. Hold the hotkey and you are muted only while it is held; a short press is the normal toggle. The hold threshold is adjustable.
 - **Other mics**: pick extra mics to watch. A `{name} mute` pill shows while one of them is muted, and a click unmutes it.
 - **Home Assistant**: `--mute`, `--unmute` and `--status` for HASS Agent (see [Home Assistant](#home-assistant-hass-agent)).

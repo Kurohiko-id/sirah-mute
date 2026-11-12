@@ -24,7 +24,7 @@ Gw Kurohiko. Gw udah batuk bertahun-tahun, jadi pas stream gw sering banget penc
 - **Border layar merah** selama mute. Gaya Solid atau Glow, tebal bisa diatur, dan berkedip sebentar waktu baru mute.
 - **Popup dengan timer mute**: `Mic mute 0:42`. Gaya Pill atau Kartu, di sudut mana aja, ukuran bebas, dan bisa tetap tampil selama mute.
 - **Peringatan ngomong pas mute**: baca level mic fisik lu, lalu border berkedip (opsional bunyi beep) kalau lu ngomong pas lagi mute. Jalan juga di setup kayak Wave Link yang di-mute mic virtualnya.
-- **Klik pill buat unmute**: popup merah bisa diklik (gaya Pill). Bisa diklik selama kelihatan; nyalain "tetap tampil selama mute" biar tetap bisa diklik. Border tetap tembus klik ke game lu.
+- **Klik pill buat unmute**: popup merah bisa diklik (gaya Pill). Pill bisa diklik selama kelihatan; nyalain 'Popup tetap tampil saat mute' biar bisa diklik kapan aja. Border tetap tembus klik ke game lu.
 - **Tahan buat batuk**: default mati. Tahan hotkey, mic mute cuma selama ditahan; tekan sebentar = toggle biasa. Batas waktu tahan bisa diatur.
 - **Mic lain**: pilih mic tambahan buat dipantau. Pill `{nama} mute` muncul kalau salah satunya mute, klik buat unmute.
 - **Home Assistant**: `--mute`, `--unmute`, dan `--status` buat HASS Agent (lihat [Home Assistant](#home-assistant-hass-agent)).
