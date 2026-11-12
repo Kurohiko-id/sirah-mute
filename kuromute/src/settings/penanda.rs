@@ -123,8 +123,8 @@ fn show(w: &MainWindow, st: &State) {
     w.set_pen_sound(c.sound_enabled);
 }
 
-/// Binds the tab; the returned closure re-enumerates monitors (tab opened).
-/// Returns (refresh, flush): re-enumerate monitors on tab open; flush pending debounced saves.
+/// Binds the tab. Returns (refresh, flush): re-enumerate monitors on tab open; flush pending
+/// debounced saves on close.
 pub fn setup(w: &MainWindow, state: &Rc<RefCell<State>>) -> (Action, Action) {
     show(w, &state.borrow());
     let ids: Rc<RefCell<Vec<(String, String)>>> = Rc::default();
