@@ -27,7 +27,7 @@ I'm Kurohiko. I've had a cough for years, so on stream I hit mute a lot. The pro
 - **Keeps your default devices**: pick your input and output, and Sirah Mute can force them at startup, notify you, or switch back automatically when Windows changes them behind your back.
 - **Tray icon shows the state**: grey capsule = live, red capsule = muted, yellow badge = mic missing.
 - Choose which monitors show the border and popup, optional mute/unmute beep, start with Windows, update check, English and Bahasa Indonesia.
-- **Small**: one exe, about 3.5 MB of RAM, hotkey-to-indicator in a few milliseconds. No telemetry; the only network call is the GitHub update check.
+- **Small**: one exe, about 3.5 MB of RAM, hotkey-to-indicator in a few milliseconds. Network use: the GitHub update check and anonymous usage stats (see [Privacy](#privacy)).
 
 ## Install
 
@@ -38,6 +38,27 @@ Download **SirahMute-Setup.exe** (per-user installer, no admin) or the portable 
 ### Coming from Kuro Mute & Force Mic?
 
 Sirah Mute is the new version of Kuro Mute. It picks up your old settings automatically on first start and replaces the old app's autostart entry. You can uninstall Kuro Mute afterwards.
+
+## Privacy
+
+Hi, I'm Kurohiko, the developer of Sirah Mute. I care a lot about your privacy.
+
+To keep Sirah Mute moving in the right direction, I need a few basic numbers: how many people install it, which features get used, roughly how much people mute, and which Windows version you're on. That tells me which features are worth improving, and which ones hardly anyone uses.
+
+All of this is **fully anonymous**. I don't know who installed Sirah Mute, and I don't know who uses which feature.
+
+**What is sent:**
+
+- A random ID created the first time Sirah Mute opens. It isn't linked to your accounts, your name, or your device.
+- Sirah Mute version, Windows version, and system language.
+- Country, estimated from the connection. IP addresses are not stored.
+- Names of the settings that are switched on, such as border Glow/Solid, popup Pill/Card, its corner and whether it stays up while muted, talk-while-muted warning, beep, default-device guard, start with Windows, and whether you changed the hotkey. Each one is counted at most once a day, so there is no per-click record.
+- How much you muted each day, as rough ranges only: how many times (1–5, 6–20, 21–50, more than 50) and for how long in total (under 5 minutes, 5–30 minutes, 30 minutes–2 hours, longer). Not the exact times or lengths of each mute.
+- Crash messages when something goes wrong, with your user folder name masked.
+
+**Never sent:** your mic and device names or IDs, which key your hotkey is, monitor names, the contents of your settings, audio, or screenshots.
+
+The data goes to my own server (`dash.kurohiko.id`). It is not sold or shared with anyone. The code that sends it is open in [`kuromute/src/stats.rs`](kuromute/src/stats.rs). If you'd rather send nothing, block `dash.kurohiko.id` in your firewall or hosts file. Sirah Mute keeps working normally.
 
 ## Build from source
 

@@ -27,7 +27,7 @@ Gw Kurohiko. Gw udah batuk bertahun-tahun, jadi pas stream gw sering banget penc
 - **Jaga device default**: pilih input dan output, lalu Sirah Mute bisa maksa pas startup, kasih notifikasi, atau balikin otomatis kalau Windows diam-diam menggantinya.
 - **Ikon tray nunjukin status**: kapsul abu-abu = mic hidup, kapsul merah = mute, badge kuning = mic nggak ketemu.
 - Pilih monitor mana yang nampilin border dan popup, bunyi beep mute/unmute (opsional), jalan saat Windows start, cek update, bahasa Inggris dan Indonesia.
-- **Ringan**: satu exe, RAM sekitar 3,5 MB, dari tombol sampai indikator cuma beberapa milidetik. Tanpa telemetri; satu-satunya koneksi internet cuma cek update ke GitHub.
+- **Ringan**: satu exe, RAM sekitar 3,5 MB, dari tombol sampai indikator cuma beberapa milidetik. Koneksi internet cuma buat cek update ke GitHub dan statistik anonim (lihat [Privasi](#privasi)).
 
 ## Install
 
@@ -38,6 +38,27 @@ Unduh **SirahMute-Setup.exe** (installer per-user, tanpa admin) atau zip portabl
 ### Pindahan dari Kuro Mute & Force Mic?
 
 Sirah Mute adalah versi baru Kuro Mute. Settingan lama otomatis kebawa waktu pertama jalan, dan entri autostart app lama diganti. Setelah itu Kuro Mute boleh di-uninstall.
+
+## Privasi
+
+Halo, aku Kurohiko, developer Sirah Mute. Aku sangat menghargai privasi kalian.
+
+Supaya Sirah Mute bisa terus berkembang ke arah yang tepat, aku butuh beberapa data dasar: berapa orang yang menginstal, fitur apa saja yang dipakai, kira-kira seberapa sering mute, dan versi Windows apa yang kalian gunakan. Dari situ aku bisa melihat fitur mana yang layak ditingkatkan, dan fitur mana yang ternyata jarang dipakai.
+
+Semua data ini **sepenuhnya anonim**. Aku tidak tahu siapa yang menginstal Sirah Mute, dan tidak tahu siapa yang memakai fitur apa.
+
+**Yang dikirim:**
+
+- ID acak yang dibuat saat Sirah Mute pertama kali dibuka. ID ini tidak terhubung ke akun, nama, atau perangkat kalian.
+- Versi Sirah Mute, versi Windows, dan bahasa sistem.
+- Negara, diperkirakan dari koneksi. Alamat IP tidak disimpan.
+- Nama pengaturan yang sedang aktif, misalnya border Glow/Solid, popup Pill/Card beserta posisinya dan apakah tetap tampil selama mute, peringatan bicara saat mute, beep, penjaga perangkat default, jalan saat Windows start, dan apakah hotkey diganti. Tiap pengaturan dihitung paling banyak sekali sehari, jadi tidak ada catatan per klik.
+- Seberapa sering kalian mute tiap hari, hanya dalam rentang kasar: berapa kali (1–5, 6–20, 21–50, lebih dari 50) dan total lamanya (di bawah 5 menit, 5–30 menit, 30 menit–2 jam, lebih lama). Waktu dan lama tiap mute tidak dikirim.
+- Pesan crash kalau Sirah Mute mengalami masalah. Nama folder pengguna di dalamnya disamarkan.
+
+**Yang tidak pernah dikirim:** nama dan ID mic atau perangkat kalian, tombol hotkey yang dipakai, nama monitor, isi pengaturan, audio, dan tangkapan layar.
+
+Data dikirim ke server milikku sendiri (`dash.kurohiko.id`), tidak dijual, dan tidak dibagikan ke pihak lain. Kode pengirimnya terbuka di [`kuromute/src/stats.rs`](kuromute/src/stats.rs). Kalau tetap tidak ingin mengirim apa pun, blokir `dash.kurohiko.id` di firewall atau file hosts. Sirah Mute tetap berjalan normal.
 
 ## Build dari source
 
