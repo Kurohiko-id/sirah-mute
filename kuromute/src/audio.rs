@@ -249,7 +249,6 @@ impl Audio {
     }
 
     /// Replaces the watched set of other mics; absent or inactive ids are skipped.
-    #[allow(dead_code)] // consumed by the others-pill task
     pub fn watch_others(&mut self, ids: &[String]) {
         self.unwatch_others();
         for id in ids {
@@ -270,7 +269,6 @@ impl Audio {
     }
 
     /// Mute state of each watched other mic, in `watch_others` order.
-    #[allow(dead_code)] // consumed by the others-pill task
     pub fn others_muted(&self) -> Vec<(String, bool)> {
         self.others
             .iter()
@@ -281,7 +279,6 @@ impl Audio {
             .collect()
     }
 
-    #[allow(dead_code)] // consumed by the others-pill task
     pub fn set_other_mute(&self, id: &str, muted: bool) -> Result<()> {
         let Some((_, vol, _)) = self.others.iter().find(|(i, _, _)| i == id) else {
             return Err(windows::Win32::Foundation::E_INVALIDARG.into());

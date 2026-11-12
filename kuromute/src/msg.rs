@@ -14,7 +14,6 @@ pub const WM_APP_DRIFT_CHOICE: u32 = WM_APP + 6;
 /// wparam 0 = main pill, 1 = other group; lparam = pill index.
 pub const WM_APP_PILL_CLICK: u32 = WM_APP + 7;
 /// An other mic's volume/mute changed; no payload.
-#[allow(dead_code)] // consumed by the others-pill task
 pub const WM_APP_OTHERS: u32 = WM_APP + 8;
 
 /// Names for RegisterWindowMessageW.

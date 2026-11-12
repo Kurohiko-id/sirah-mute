@@ -38,12 +38,11 @@ use windows::Win32::UI::WindowsAndMessaging::{
     BeginDeferWindowPos, CreateWindowExW, DefWindowProcW, DeferWindowPos, DestroyWindow,
     EndDeferWindowPos, FindWindowW, GWLP_USERDATA, GetWindowLongPtrW, HTCLIENT, HTTRANSPARENT,
     HWND_TOPMOST, IDC_HAND, KillTimer, LWA_ALPHA, LoadCursorW, MA_NOACTIVATE, PostMessageW,
-    RegisterClassExW, SET_WINDOW_POS_FLAGS, SWP_HIDEWINDOW, SetCursor, SetWindowLongPtrW,
-    WM_LBUTTONUP, WM_SETCURSOR,
-    SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOREDRAW, SWP_NOSIZE, SWP_SHOWWINDOW,
-    SetLayeredWindowAttributes, SetTimer, SetWindowPos, ULW_ALPHA, UpdateLayeredWindow, WM_CLOSE,
-    WM_MOUSEACTIVATE, WM_NCHITTEST, WNDCLASSEXW, WS_EX_LAYERED, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW,
-    WS_EX_TOPMOST, WS_EX_TRANSPARENT, WS_POPUP,
+    RegisterClassExW, SET_WINDOW_POS_FLAGS, SWP_HIDEWINDOW, SWP_NOACTIVATE, SWP_NOMOVE,
+    SWP_NOREDRAW, SWP_NOSIZE, SWP_SHOWWINDOW, SetCursor, SetLayeredWindowAttributes, SetTimer,
+    SetWindowLongPtrW, SetWindowPos, ULW_ALPHA, UpdateLayeredWindow, WM_CLOSE, WM_LBUTTONUP,
+    WM_MOUSEACTIVATE, WM_NCHITTEST, WM_SETCURSOR, WNDCLASSEXW, WS_EX_LAYERED, WS_EX_NOACTIVATE,
+    WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_EX_TRANSPARENT, WS_POPUP,
 };
 use windows::core::{BOOL, PCWSTR, Result, w};
 
@@ -58,10 +57,10 @@ const POPUP_CLASS: PCWSTR = w!("SirahMutePopup");
 const PILL_CLASS: PCWSTR = w!("SirahMutePill");
 const BORDER_CLASS: PCWSTR = w!("SirahMuteBorder");
 const BORDER_COLOR: COLORREF = COLORREF(0x004D_48E5); // #E5484D as 0x00BBGGRR
-const BORDER_RGB: u32 = 0xE5484D;
+pub(crate) const BORDER_RGB: u32 = 0xE5484D;
 const GLYPH_MUTED: &str = "\u{E74F}"; // MicOff (OverlayForm.cs:88)
 const GLYPH_UNMUTED: &str = "\u{E720}"; // Microphone
-const GLYPH_MIC_OFF: &str = "\u{EC54}"; // MicOff (pill style)
+pub(crate) const GLYPH_MIC_OFF: &str = "\u{EC54}"; // MicOff (pill style)
 const PILL_MUTED: &str = "Mic mute";
 const PILL_UNMUTED: &str = "Mic on";
 
@@ -78,9 +77,9 @@ const BG: D2D1_COLOR_F = rgb(0x131417, 242.0 / 255.0);
 const PILL_BG: D2D1_COLOR_F = rgb(0x120A0B, 0.9);
 const DIM: D2D1_COLOR_F = rgb(0xD7DADF, 0.35);
 const WHITE: D2D1_COLOR_F = rgb(0xFFFFFF, 1.0);
-const MUTE_RED: D2D1_COLOR_F = rgb(BORDER_RGB, 1.0);
+pub(crate) const MUTE_RED: D2D1_COLOR_F = rgb(BORDER_RGB, 1.0);
 
-unsafe extern "system" fn wndproc(h: HWND, m: u32, wp: WPARAM, lp: LPARAM) -> LRESULT {
+pub(crate) unsafe extern "system" fn wndproc(h: HWND, m: u32, wp: WPARAM, lp: LPARAM) -> LRESULT {
     match m {
         WM_MOUSEACTIVATE => LRESULT(MA_NOACTIVATE as isize),
         WM_NCHITTEST => LRESULT(HTTRANSPARENT as isize),
@@ -170,8 +169,12 @@ fn register_classes() {
     });
 }
 
-fn create_window(class: PCWSTR, r: Rect, transparent: bool) -> Result<HWND> {
-    let click = if transparent { WS_EX_TRANSPARENT } else { Default::default() };
+pub(crate) fn create_window(class: PCWSTR, r: Rect, transparent: bool) -> Result<HWND> {
+    let click = if transparent {
+        WS_EX_TRANSPARENT
+    } else {
+        Default::default()
+    };
     unsafe {
         CreateWindowExW(
             WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | click | WS_EX_TOPMOST | WS_EX_LAYERED,
@@ -216,6 +219,105 @@ pub(crate) fn text_width(dw: &IDWriteFactory, s: &[u16], fmt: &IDWriteTextFormat
         l.GetMetrics(&mut m)?;
         Ok(m.widthIncludingTrailingWhitespace)
     }
+}
+
+/// What one pill shows. Formats are `[icon, label, clock]`.
+pub(crate) struct PillText<'a> {
+    pub(crate) glyph: &'a str,
+    pub(crate) label: &'a str,
+    pub(crate) clock: Option<&'a str>,
+    pub(crate) accent: D2D1_COLOR_F,
+    pub(crate) edge: D2D1_COLOR_F,
+}
+
+/// (pad, icon/label gap, label/clock gap) for a pill of height `hf`.
+fn pill_spacing(hf: f32, clock: bool) -> (f32, f32, f32) {
+    let gap = hf * 0.2;
+    (hf * 0.36, gap, if clock { gap * 1.4 } else { 0.0 })
+}
+
+/// Widths of glyph, label and clock (0 without one).
+fn pill_parts(r: &Renderer, f: [&IDWriteTextFormat; 3], p: &PillText) -> Result<[f32; 3]> {
+    let u = |s: &str| s.encode_utf16().collect::<Vec<u16>>();
+    Ok([
+        text_width(&r.dw, &u(p.glyph), f[0])?,
+        text_width(&r.dw, &u(p.label), f[1])?,
+        match p.clock {
+            Some(c) => text_width(&r.dw, &u(c), f[2])?,
+            None => 0.0,
+        },
+    ])
+}
+
+/// Full width of pill `p` at height `hf`, the pill hugging its text.
+pub(crate) fn pill_width(
+    r: &Renderer,
+    f: [&IDWriteTextFormat; 3],
+    p: &PillText,
+    hf: f32,
+) -> Result<f32> {
+    let [iw, lw, cw] = pill_parts(r, f, p)?;
+    let (pad, gap, cgap) = pill_spacing(hf, p.clock.is_some());
+    Ok(pad + iw + gap + lw + cgap + cw + pad)
+}
+
+/// Draws pill `p` (`pw` x `hf`) at `x0` (top 0) into the bound render target.
+pub(crate) fn paint_pill(
+    r: &Renderer,
+    f: [&IDWriteTextFormat; 3],
+    p: &PillText,
+    x0: f32,
+    pw: f32,
+    hf: f32,
+) -> Result<()> {
+    let u = |s: &str| s.encode_utf16().collect::<Vec<u16>>();
+    let [iw, lw, cw] = pill_parts(r, f, p)?;
+    let (pad, gap, cgap) = pill_spacing(hf, p.clock.is_some());
+    let sw = (hf / 30.0).max(1.0); // outline width
+    let brush = |c: &D2D1_COLOR_F| -> Result<ID2D1SolidColorBrush> {
+        unsafe { r.rt.CreateSolidColorBrush(c, None) }
+    };
+    let shape = D2D1_ROUNDED_RECT {
+        rect: D2D_RECT_F {
+            left: x0 + sw / 2.0,
+            top: sw / 2.0,
+            right: x0 + pw - sw / 2.0,
+            bottom: hf - sw / 2.0,
+        },
+        radiusX: (hf - sw) / 2.0,
+        radiusY: (hf - sw) / 2.0,
+    };
+    let put = |s: &str, fmt: &IDWriteTextFormat, c: &D2D1_COLOR_F, x: f32, w: f32| -> Result<()> {
+        let lr = D2D_RECT_F {
+            left: x,
+            top: 0.0,
+            right: x + w + 1.0,
+            bottom: hf,
+        };
+        unsafe {
+            r.rt.DrawText(
+                &u(s),
+                fmt,
+                &lr,
+                &brush(c)?,
+                D2D1_DRAW_TEXT_OPTIONS_NONE,
+                DWRITE_MEASURING_MODE_NATURAL,
+            );
+        }
+        Ok(())
+    };
+    unsafe {
+        r.rt.FillRoundedRectangle(&shape, &brush(&PILL_BG)?);
+        r.rt.DrawRoundedRectangle(&shape, &brush(&p.edge)?, sw, None);
+    }
+    let x = x0 + pad;
+    put(p.glyph, f[0], &p.accent, x, iw)?;
+    let x = x + iw + gap;
+    put(p.label, f[1], &WHITE, x, lw)?;
+    if let Some(c) = p.clock {
+        put(c, f[2], &FG, x + lw + cgap, cw)?;
+    }
+    Ok(())
 }
 
 impl Popup {
@@ -316,70 +418,26 @@ impl Popup {
     }
 
     fn paint_pill(&self, r: &Renderer, wf: f32, hf: f32, muted_secs: Option<u64>) -> Result<()> {
-        let u = |s: &str| s.encode_utf16().collect::<Vec<u16>>();
-        let (glyph, label, accent, edge) = match muted_secs {
-            Some(_) => (GLYPH_MIC_OFF, PILL_MUTED, MUTE_RED, rgb(BORDER_RGB, 0.8)),
-            None => (GLYPH_UNMUTED, PILL_UNMUTED, FG, DIM),
-        };
-        let (glyph, label) = (u(glyph), u(label));
-        let clock = muted_secs.map(|s| u(&fmt_elapsed(s)));
-        let pad = hf * 0.36;
-        let gap = hf * 0.2;
-        let iw = text_width(&r.dw, &glyph, &self.icon_fmt)?;
-        let lw = text_width(&r.dw, &label, &self.text_fmt)?;
-        let cw = match &clock {
-            Some(c) => text_width(&r.dw, c, &self.clock_fmt)?,
-            None => 0.0,
-        };
-        let cgap = if clock.is_some() { gap * 1.4 } else { 0.0 };
-        let pw = (pad + iw + gap + lw + cgap + cw + pad).min(wf);
-        let x0 = (wf - pw) * self.align;
-        let sw = (hf / 30.0).max(1.0); // outline width
-        let brush = |c: &D2D1_COLOR_F| -> Result<ID2D1SolidColorBrush> {
-            unsafe { r.rt.CreateSolidColorBrush(c, None) }
-        };
-        let shape = D2D1_ROUNDED_RECT {
-            rect: D2D_RECT_F {
-                left: x0 + sw / 2.0,
-                top: sw / 2.0,
-                right: x0 + pw - sw / 2.0,
-                bottom: hf - sw / 2.0,
+        let clock = muted_secs.map(fmt_elapsed);
+        let p = match muted_secs {
+            Some(_) => PillText {
+                glyph: GLYPH_MIC_OFF,
+                label: PILL_MUTED,
+                clock: clock.as_deref(),
+                accent: MUTE_RED,
+                edge: rgb(BORDER_RGB, 0.8),
             },
-            radiusX: (hf - sw) / 2.0,
-            radiusY: (hf - sw) / 2.0,
+            None => PillText {
+                glyph: GLYPH_UNMUTED,
+                label: PILL_UNMUTED,
+                clock: None,
+                accent: FG,
+                edge: DIM,
+            },
         };
-        let put =
-            |s: &[u16], fmt: &IDWriteTextFormat, c: &D2D1_COLOR_F, x: f32, w: f32| -> Result<()> {
-                let lr = D2D_RECT_F {
-                    left: x,
-                    top: 0.0,
-                    right: x + w + 1.0,
-                    bottom: hf,
-                };
-                unsafe {
-                    r.rt.DrawText(
-                        s,
-                        fmt,
-                        &lr,
-                        &brush(c)?,
-                        D2D1_DRAW_TEXT_OPTIONS_NONE,
-                        DWRITE_MEASURING_MODE_NATURAL,
-                    );
-                }
-                Ok(())
-            };
-        unsafe {
-            r.rt.FillRoundedRectangle(&shape, &brush(&PILL_BG)?);
-            r.rt.DrawRoundedRectangle(&shape, &brush(&edge)?, sw, None);
-        }
-        let x = x0 + pad;
-        put(&glyph, &self.icon_fmt, &accent, x, iw)?;
-        let x = x + iw + gap;
-        put(&label, &self.text_fmt, &WHITE, x, lw)?;
-        if let Some(c) = &clock {
-            put(c, &self.clock_fmt, &FG, x + lw + cgap, cw)?;
-        }
-        Ok(())
+        let f = [&self.icon_fmt, &self.text_fmt, &self.clock_fmt];
+        let pw = pill_width(r, f, &p, hf)?.min(wf);
+        paint_pill(r, f, &p, (wf - pw) * self.align, pw, hf)
     }
 
     fn show(&self, slot: usize) {
@@ -530,6 +588,31 @@ impl Renderer {
         }
     }
 
+    /// Pill formats `[icon, label, clock]` at popup scale `s`, `pt` physical px per point.
+    pub(crate) fn pill_formats(&self, s: f32, pt: f32) -> Result<[IDWriteTextFormat; 3]> {
+        let lead = DWRITE_TEXT_ALIGNMENT_LEADING;
+        Ok([
+            self.format_w(
+                self.icon_family,
+                12.5 * s * pt,
+                DWRITE_FONT_WEIGHT_NORMAL,
+                lead,
+            )?,
+            self.format_w(
+                w!("Segoe UI"),
+                11.5 * s * pt,
+                DWRITE_FONT_WEIGHT_SEMI_BOLD,
+                lead,
+            )?,
+            self.format_w(
+                w!("Segoe UI"),
+                11.5 * s * pt,
+                DWRITE_FONT_WEIGHT_NORMAL,
+                lead,
+            )?,
+        ])
+    }
+
     fn popup(&self, mon: &Monitor, cfg: &Config, lang: ResolvedLang) -> Result<Popup> {
         let style = cfg.popup_style;
         let rect = popup_rect(
@@ -549,27 +632,8 @@ impl Renderer {
                 self.format(w!("Segoe UI"), 9.5 * s * pt)?,
             ),
             PopupStyle::Pill => {
-                let lead = DWRITE_TEXT_ALIGNMENT_LEADING;
-                (
-                    self.format_w(
-                        self.icon_family,
-                        12.5 * s * pt,
-                        DWRITE_FONT_WEIGHT_NORMAL,
-                        lead,
-                    )?,
-                    self.format_w(
-                        w!("Segoe UI"),
-                        11.5 * s * pt,
-                        DWRITE_FONT_WEIGHT_SEMI_BOLD,
-                        lead,
-                    )?,
-                    self.format_w(
-                        w!("Segoe UI"),
-                        11.5 * s * pt,
-                        DWRITE_FONT_WEIGHT_NORMAL,
-                        lead,
-                    )?,
-                )
+                let [icon, text, clock] = self.pill_formats(s, pt)?;
+                (icon, text, clock)
             }
         };
         let align = match cfg.popup_position {

@@ -12,6 +12,7 @@ mod log;
 mod migrate;
 mod monitors;
 mod msg;
+mod others;
 mod overlay;
 mod policy_config;
 mod prompt;

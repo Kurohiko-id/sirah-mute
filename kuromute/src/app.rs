@@ -4,6 +4,7 @@ use crate::config::{self, Config, LoadOutcome, config_path};
 use crate::enforcer::{Action, Enforcer};
 use crate::i18n::{self, Key, ResolvedLang, t};
 use crate::msg::*;
+use crate::others::OtherPills;
 use crate::overlay::{Indicators, TIMER_MUTE_CLOCK, TIMER_POPUP_HIDE, TIMER_PULSE};
 use crate::prompt::{self, Choice, Prompt, Row};
 use crate::talk::TalkDetector;
@@ -102,6 +103,11 @@ pub fn diff(o: &Config, n: &Config) -> Changes {
         others: o.other_mics != n.other_mics || o.other_mics_position != n.other_mics_position,
         cough: o.cough_hold != n.cough_hold || o.cough_hold_ms != n.cough_hold_ms,
     }
+}
+
+/// Mic id behind other-pill `i`; None for an index from a stale layout.
+fn other_click_target(shown: &[String], i: usize) -> Option<&str> {
+    shown.get(i).map(String::as_str)
 }
 
 /// Indicator state to show after a re-watch, or None if nothing should be shown.
@@ -303,6 +309,9 @@ struct State {
     audio: audio::Audio,
     tray: Tray,
     ind: Indicators,
+    others: OtherPills,
+    /// Ids of the other mics whose pills show, in shown order (click index -> id).
+    others_shown: Vec<String>,
     enforcer: Enforcer,
     /// Last known mute state of the watched mic; None = no mic / not present.
     last_muted: Option<bool>,
@@ -449,12 +458,66 @@ impl State {
         if self.last_muted == Some(true) {
             self.ind.show(self.hwnd, true, false);
         }
+        self.rebuild_others();
         if self.drift == Drift::Asking {
             // Monitor layout changed: ask again so the prompt lands in the new work area.
             self.drift = Drift::Clear;
             self.prompt = None;
             self.guard_check();
         }
+    }
+
+    fn rebuild_others(&mut self) {
+        let all = monitors::enumerate();
+        let sel = monitors::select(&all, self.cfg.all_monitors, &self.cfg.monitor_ids);
+        self.others.rebuild(&self.cfg, &sel);
+        self.others_shown.clear(); // new windows start hidden: force a redraw
+        self.rewatch_others();
+    }
+
+    /// Watches the enabled other mics (never the main one) and syncs their pills.
+    /// Absent mics are skipped, so an unplugged mic's pill goes on the next call.
+    fn rewatch_others(&mut self) {
+        let main = self.cfg.mic_id.as_deref();
+        let ids: Vec<String> = self
+            .cfg
+            .other_mics
+            .iter()
+            .filter(|m| m.enabled && Some(m.id.as_str()) != main)
+            .map(|m| m.id.clone())
+            .collect();
+        self.audio.watch_others(&ids);
+        self.refresh_others();
+    }
+
+    /// Redraws the pill group only when the set of muted other mics changed.
+    fn refresh_others(&mut self) {
+        let muted: Vec<String> = self
+            .audio
+            .others_muted()
+            .into_iter()
+            .filter_map(|(id, m)| m.then_some(id))
+            .collect();
+        if muted == self.others_shown {
+            return;
+        }
+        let devs = self.audio.list(audio::Flow::Capture);
+        let labels: Vec<String> = muted
+            .iter()
+            .map(|id| {
+                let name = self.cfg.other_mics.iter().find(|m| &m.id == id);
+                match name.map(|m| m.name.trim()).filter(|n| !n.is_empty()) {
+                    Some(n) => n.to_string(),
+                    None => devs
+                        .iter()
+                        .find(|d| &d.id == id)
+                        .map(|d| d.name.chars().take(config::OTHER_NAME_MAX).collect())
+                        .unwrap_or_else(|| "Mic".to_string()),
+                }
+            })
+            .collect();
+        self.others.show(&labels);
+        self.others_shown = muted;
     }
 
     fn configured_defaults(&self, input: bool, output: bool) -> Vec<String> {
@@ -511,7 +574,11 @@ impl State {
         };
         // "Now" = the first role that isn't the pick (drift can be in one role only).
         let now = |roles: &[Option<String>; 3], pick: &Option<String>| {
-            roles.iter().flatten().find(|r| Some(*r) != pick.as_ref()).cloned()
+            roles
+                .iter()
+                .flatten()
+                .find(|r| Some(*r) != pick.as_ref())
+                .cloned()
         };
         let mut rows = Vec::new();
         if input {
@@ -743,6 +810,7 @@ impl State {
         self.stop_cough();
         hotkey::unregister(self.hwnd, HOTKEY_ID);
         self.ind.destroy();
+        self.others.destroy();
         self.prompt = None;
         self.tray.remove();
         unsafe { PostQuitMessage(0) };
@@ -822,7 +890,11 @@ impl State {
             self.rewatch();
         }
         if ch.indicators {
-            self.rebuild_indicators();
+            self.rebuild_indicators(); // also rebuilds the other-mic pills
+        } else if ch.others {
+            self.rebuild_others();
+        } else if ch.mic {
+            self.rewatch_others();
         }
         if ch.guard {
             self.enforcer.reset();
@@ -869,6 +941,7 @@ impl State {
                     TIMER_DEVICES => {
                         self.devices_armed = false;
                         self.rewatch(); // also refreshes the talk watch
+                        self.rewatch_others();
                         self.guard_check();
                     }
                     TIMER_GUARD_RESUME => self.guard_check(),
@@ -904,6 +977,14 @@ impl State {
                     log!("pill click unmute failed: {e}");
                 }
             }
+            WM_APP_PILL_CLICK if wp.0 == 1 => {
+                if let Some(id) = other_click_target(&self.others_shown, lp.0 as usize)
+                    && let Err(e) = self.audio.set_other_mute(id, false)
+                {
+                    log!("other pill click unmute failed: {e}");
+                }
+            }
+            WM_APP_OTHERS => self.refresh_others(),
             WM_APP_UPDATE => self.on_update(wp.0 != 0),
             _ if m == r.toggle => self.on_toggle(),
             _ if m == r.reload => self.reload(),
@@ -958,6 +1039,7 @@ fn is_ours(m: u32) -> bool {
             | WM_APP_TRAY
             | WM_APP_DRIFT_CHOICE
             | WM_APP_PILL_CLICK
+            | WM_APP_OTHERS
     ) || (m != 0 && [r.reload, r.show, r.toggle, r.pause, r.taskbar].contains(&m))
 }
 
@@ -1088,6 +1170,8 @@ pub fn run() -> i32 {
         audio,
         tray,
         ind: Indicators::new(),
+        others: OtherPills::new(),
+        others_shown: Vec::new(),
         enforcer: Enforcer::new(),
         last_muted: None,
         pending_toggle_at: None,
@@ -1127,9 +1211,15 @@ mod tests {
     #[test]
     fn drift_asks_once_per_episode() {
         assert_eq!(drift_after_check(Drift::Clear, true), (Drift::Asking, true));
-        assert_eq!(drift_after_check(Drift::Asking, true), (Drift::Asking, false));
+        assert_eq!(
+            drift_after_check(Drift::Asking, true),
+            (Drift::Asking, false)
+        );
         assert_eq!(drift_after_check(Drift::Kept, true), (Drift::Kept, false));
-        assert_eq!(drift_after_check(Drift::Snoozed, true), (Drift::Snoozed, false));
+        assert_eq!(
+            drift_after_check(Drift::Snoozed, true),
+            (Drift::Snoozed, false)
+        );
         // Defaults match again (or guard off / AutoRevert): episode over, next drift asks again.
         for d in [Drift::Asking, Drift::Kept, Drift::Snoozed] {
             assert_eq!(drift_after_check(d, false), (Drift::Clear, false));
@@ -1290,6 +1380,14 @@ mod tests {
     fn pct_encodes_reserved_and_utf8() {
         assert_eq!(pct("a-Z_0.~ *:\n"), "a-Z_0.~%20%2A%3A%0A");
         assert_eq!(pct("é"), "%C3%A9");
+    }
+
+    #[test]
+    fn click_index_out_of_range_is_ignored() {
+        let shown = ["a".to_string(), "b".to_string()];
+        assert_eq!(other_click_target(&shown, 3), None);
+        assert_eq!(other_click_target(&shown, 1), Some("b"));
+        assert_eq!(other_click_target(&[], 0), None);
     }
 
     #[test]
