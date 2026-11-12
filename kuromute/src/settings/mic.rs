@@ -32,6 +32,19 @@ impl Mic {
     }
 }
 
+/// Slider value to the nearest 50 ms step, within the config's 200..=2000 range.
+fn snap_cough_ms(v: f32) -> u32 {
+    ((v / 50.0).round() as u32 * 50).clamp(200, 2000)
+}
+
+fn cough_secs_text(ms: u32, lang: i18n::ResolvedLang) -> String {
+    let s = format!("{:.1}", ms as f32 / 1000.0);
+    match lang {
+        i18n::ResolvedLang::Id => format!("{} dtk", s.replace('.', ",")),
+        _ => format!("{s} s"),
+    }
+}
+
 pub fn model(items: Vec<String>) -> ModelRc<SharedString> {
     ModelRc::new(VecModel::from(
         items
@@ -203,6 +216,29 @@ fn setup_mics(w: &MainWindow, state: &Rc<RefCell<State>>, sink: HWND) -> Rc<dyn 
         commit(&st, &w);
     });
     w.set_talk_enabled(state.borrow().cfg.talk_warn_enabled);
+
+    let (ww, st) = (w.as_weak(), state.clone());
+    w.on_cough_changed(move || {
+        let Some(w) = ww.upgrade() else { return };
+        st.borrow_mut().cfg.cough_hold = w.get_cough_enabled();
+        commit(&st, &w);
+    });
+    let (ww, st) = (w.as_weak(), state.clone());
+    w.on_cough_ms_changed(move |v| {
+        let Some(w) = ww.upgrade() else { return };
+        let ms = snap_cough_ms(v);
+        w.set_cough_ms(ms as f32);
+        w.set_cough_secs(cough_secs_text(ms, i18n::resolve(st.borrow().cfg.language)).into());
+        if ms != std::mem::replace(&mut st.borrow_mut().cfg.cough_hold_ms, ms) {
+            commit(&st, &w);
+        }
+    });
+    {
+        let s = state.borrow();
+        w.set_cough_enabled(s.cfg.cough_hold);
+        w.set_cough_ms(s.cfg.cough_hold_ms as f32);
+        w.set_cough_secs(cough_secs_text(s.cfg.cough_hold_ms, i18n::resolve(s.cfg.language)).into());
+    }
     refresh
 }
 
@@ -291,5 +327,19 @@ pub fn setup(w: &MainWindow, state: &Rc<RefCell<State>>) -> Mic {
         recorder,
         sink,
         refresh,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn cough_slider_snaps_and_formats() {
+        assert_eq!(snap_cough_ms(424.0), 400);
+        assert_eq!(snap_cough_ms(426.0), 450);
+        assert_eq!(snap_cough_ms(5000.0), 2000);
+        assert_eq!(cough_secs_text(400, i18n::ResolvedLang::En), "0.4 s");
+        assert_eq!(cough_secs_text(1350, i18n::ResolvedLang::Id), "1,4 dtk");
     }
 }

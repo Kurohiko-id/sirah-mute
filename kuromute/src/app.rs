@@ -44,6 +44,8 @@ const TIMER_GUARD_RESUME: usize = 4;
 const TIMER_SETTINGS_WATCH: usize = 5;
 pub(crate) const TIMER_TALK: usize = 8;
 const TIMER_DRIFT_SNOOZE: usize = 9;
+const TIMER_COUGH: usize = 10;
+const COUGH_POLL_MS: u32 = 20;
 const DRIFT_SNOOZE_MS: u32 = 15 * 60 * 1000;
 const TALK_POLL_MS: u32 = 100;
 pub(crate) const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -305,6 +307,8 @@ struct State {
     /// Last known mute state of the watched mic; None = no mic / not present.
     last_muted: Option<bool>,
     pending_toggle_at: Option<Instant>,
+    /// Cough hold: when the hotkey press that muted began; Some while TIMER_COUGH runs.
+    cough_since: Option<Instant>,
     pending_balloon: Option<Pending>,
     drift: Drift,
     prompt: Option<Prompt>,
@@ -599,6 +603,63 @@ impl State {
         spawn_update_check(self.hwnd, false);
     }
 
+    fn stop_cough(&mut self) {
+        self.cough_since = None;
+        unsafe {
+            let _ = KillTimer(Some(self.hwnd), TIMER_COUGH);
+        }
+    }
+
+    /// Hold ended: unmute if held long enough. Not a latency measurement.
+    fn finish_cough(&mut self) {
+        let Some(t0) = self.cough_since.take() else {
+            return;
+        };
+        unsafe {
+            let _ = KillTimer(Some(self.hwnd), TIMER_COUGH);
+        }
+        if hotkey::cough_release(t0.elapsed(), self.cfg.cough_hold_ms)
+            && let Err(e) = self.audio.set_mute(false)
+        {
+            log!("cough unmute failed: {e}");
+        }
+    }
+
+    fn tick_cough(&mut self) {
+        if self.cough_since.is_none() {
+            return; // stale WM_TIMER queued before stop_cough
+        }
+        if hotkey::key_down(self.cfg.hotkey.vk) {
+            self.arm(TIMER_COUGH, COUGH_POLL_MS);
+        } else {
+            self.finish_cough();
+        }
+    }
+
+    fn on_hotkey(&mut self) {
+        if !self.cfg.cough_hold
+            || hotkey_action(self.cfg.mic_id.as_deref(), self.last_muted.is_some())
+                != HotkeyAction::Toggle
+        {
+            return self.on_toggle();
+        }
+        self.finish_cough(); // press while a hold is live: treat as release first
+        if self.last_muted == Some(false) {
+            let now = Instant::now();
+            self.pending_toggle_at = Some(now);
+            if let Err(e) = self.audio.set_mute(true) {
+                log!("cough mute failed: {e}");
+                self.pending_toggle_at = None;
+                self.balloon(t(self.lang, Key::MicDisconnected));
+                return;
+            }
+            self.cough_since = Some(now);
+            self.arm(TIMER_COUGH, COUGH_POLL_MS);
+        } else {
+            self.on_toggle();
+        }
+    }
+
     fn on_toggle(&mut self) {
         match hotkey_action(self.cfg.mic_id.as_deref(), self.last_muted.is_some()) {
             HotkeyAction::OpenSettings => self.open_settings(),
@@ -679,6 +740,7 @@ impl State {
     }
 
     fn exit(&mut self) {
+        self.stop_cough();
         hotkey::unregister(self.hwnd, HOTKEY_ID);
         self.ind.destroy();
         self.prompt = None;
@@ -706,6 +768,7 @@ impl State {
         }
         self.hotkey_paused = paused;
         if paused {
+            self.stop_cough();
             hotkey::unregister(self.hwnd, HOTKEY_ID);
             self.settings_proc =
                 (pid != 0).then(|| unsafe { OpenProcess(PROCESS_SYNCHRONIZE, false, pid).ok() });
@@ -746,6 +809,7 @@ impl State {
         };
         let ch = diff(&self.cfg, &new);
         log!("reload: {ch:?}");
+        self.stop_cough();
         self.cfg = new;
         self.can_save = true;
         self.lang = i18n::resolve(self.cfg.language);
@@ -776,7 +840,7 @@ impl State {
     fn handle(&mut self, m: u32, wp: WPARAM, lp: LPARAM) {
         let r = reg();
         match m {
-            WM_HOTKEY => self.on_toggle(),
+            WM_HOTKEY => self.on_hotkey(),
             WM_APP_MUTE => self.on_mute(wp.0 != 0),
             WM_APP_DEVICES => self.arm_devices(),
             WM_CLOSE => self.exit(),
@@ -799,6 +863,7 @@ impl State {
                         self.ind.hide_popup();
                     }
                     TIMER_TALK => self.tick_talk(),
+                    TIMER_COUGH => self.tick_cough(),
                     TIMER_PULSE => self.ind.tick_pulse(self.hwnd),
                     TIMER_MUTE_CLOCK => self.ind.tick_clock(self.hwnd),
                     TIMER_DEVICES => {
@@ -1026,6 +1091,7 @@ pub fn run() -> i32 {
         enforcer: Enforcer::new(),
         last_muted: None,
         pending_toggle_at: None,
+        cough_since: None,
         pending_balloon: None,
         drift: Drift::Clear,
         prompt: None,

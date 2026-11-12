@@ -65,6 +65,8 @@ pub enum Key {
     TalkWarnEnabled,
     TalkWarnSource,
     TalkWarnNote,
+    CoughHold,
+    CoughNote,
     SecTest,
     TestLabel,
     TestButton,
@@ -141,7 +143,7 @@ pub enum Key {
 
 impl Key {
     #[cfg(test)]
-    pub const ALL: [Key; 112] = [
+    pub const ALL: [Key; 114] = [
         Key::Muted,
         Key::Unmuted,
         Key::MicDisconnected,
@@ -182,6 +184,8 @@ impl Key {
         Key::TalkWarnEnabled,
         Key::TalkWarnSource,
         Key::TalkWarnNote,
+        Key::CoughHold,
+        Key::CoughNote,
         Key::SecTest,
         Key::TestLabel,
         Key::TestButton,
@@ -344,6 +348,10 @@ pub fn t(l: ResolvedLang, k: Key) -> &'static str {
         (TalkWarnEnabled, Id) => "Ingatkan kalau ngomong pas mute",
         (TalkWarnSource, En) => "Physical mic to listen to",
         (TalkWarnSource, Id) => "Mic fisik yang dipantau",
+        (CoughHold, En) => "Hold to cough",
+        (CoughHold, Id) => "Tahan untuk batuk",
+        (CoughNote, En) => "Hold the key = muted while held. Short press = normal mute/unmute.",
+        (CoughNote, Id) => "Tahan tombol = mute selama ditahan. Tekan sebentar = mute/unmute biasa.",
         (TalkWarnNote, En) => {
             "Pick your real mic, not the one you mute. Works only while another app (e.g. Wave Link) is using that mic."
         }

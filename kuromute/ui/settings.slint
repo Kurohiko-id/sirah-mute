@@ -31,6 +31,8 @@ export global Strings {
     in property <string> talk-warn-enabled;
     in property <string> talk-warn-source;
     in property <string> talk-warn-note;
+    in property <string> cough-hold;
+    in property <string> cough-note;
     in property <string> sec-test;
     in property <string> test-label;
     in property <string> test-button;
@@ -168,6 +170,11 @@ export component MainWindow inherits Window {
     in-out property <bool> mod-shift;
     in-out property <bool> mod-win;
     callback hotkey-picked();
+    in-out property <bool> cough-enabled;
+    in-out property <float> cough-ms: 400;
+    in property <string> cough-secs;
+    callback cough-changed();
+    callback cough-ms-changed(float);
     in property <string> hotkey-error;
     in property <bool> hotkey-warn;
     in property <string> save-error;
@@ -294,6 +301,21 @@ export component MainWindow inherits Window {
                     }
                     if root.hotkey-error != "": Note { text: root.hotkey-error; color: #ff6b6b; }
                     if root.hotkey-warn: Note { text: Strings.hotkey-leaks; color: #f7c948; }
+                    Row {
+                        label: Strings.cough-hold;
+                        CheckBox { checked <=> root.cough-enabled; toggled => { root.cough-changed(); } }
+                    }
+                    if root.cough-enabled: Row {
+                        label: root.cough-secs;
+                        Slider {
+                            width: 200px;
+                            minimum: 200;
+                            maximum: 2000;
+                            value <=> root.cough-ms;
+                            changed(v) => { root.cough-ms-changed(v); }
+                        }
+                    }
+                    if root.cough-enabled: Note { text: Strings.cough-note; color: Palette.text-dim; }
                     SectionTitle { text: Strings.sec-talk-warn; }
                     Row {
                         label: Strings.talk-warn-enabled;

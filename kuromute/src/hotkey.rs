@@ -1,7 +1,8 @@
 use crate::config::Hotkey;
 use windows::Win32::Foundation::HWND;
+use std::time::Duration;
 use windows::Win32::UI::Input::KeyboardAndMouse::{
-    HOT_KEY_MODIFIERS, RegisterHotKey, UnregisterHotKey,
+    GetAsyncKeyState, HOT_KEY_MODIFIERS, RegisterHotKey, UnregisterHotKey,
 };
 
 pub const MOD_ALT: u32 = 1;
@@ -112,9 +113,105 @@ pub fn unregister(hwnd: HWND, id: i32) {
     }
 }
 
+/// Physical key state; RegisterHotKey only reports the press, so release is polled.
+pub fn key_down(vk: u32) -> bool {
+    (unsafe { GetAsyncKeyState(vk as i32) } as u16) & 0x8000 != 0
+}
+
+/// Cough hold: true = unmute on release (held at least the threshold).
+pub fn cough_release(held: Duration, threshold_ms: u32) -> bool {
+    held >= Duration::from_millis(threshold_ms as u64)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn cough_release_threshold() {
+        let ms = Duration::from_millis;
+        assert!(!cough_release(ms(399), 400));
+        assert!(cough_release(ms(400), 400));
+        assert!(cough_release(ms(1000), 400));
+        assert!(!cough_release(ms(0), 200));
+    }
+
+    /// Spike: does GetAsyncKeyState see a key swallowed by RegisterHotKey?
+    #[test]
+    #[ignore]
+    fn async_state_sees_registered_hotkey() {
+        use windows::Win32::Foundation::HWND;
+        use windows::Win32::UI::Input::KeyboardAndMouse::{
+            INPUT, INPUT_0, INPUT_KEYBOARD, KEYBDINPUT, KEYBD_EVENT_FLAGS, KEYEVENTF_KEYUP,
+            SendInput, VIRTUAL_KEY,
+        };
+        use windows::Win32::UI::WindowsAndMessaging::{
+            CreateWindowExW, DestroyWindow, DispatchMessageW, HWND_MESSAGE, MSG, PM_REMOVE,
+            PeekMessageW, WINDOW_EX_STYLE, WM_HOTKEY, WS_OVERLAPPED,
+        };
+        use windows::core::w;
+        let send = |up: bool| {
+            let i = INPUT {
+                r#type: INPUT_KEYBOARD,
+                Anonymous: INPUT_0 {
+                    ki: KEYBDINPUT {
+                        wVk: VIRTUAL_KEY(0x87),
+                        dwFlags: if up { KEYEVENTF_KEYUP } else { KEYBD_EVENT_FLAGS(0) },
+                        ..Default::default()
+                    },
+                },
+            };
+            unsafe { SendInput(&[i], std::mem::size_of::<INPUT>() as i32) };
+        };
+        struct Guard(HWND);
+        impl Drop for Guard {
+            fn drop(&mut self) {
+                unregister(self.0, 77);
+                unsafe {
+                    let _ = DestroyWindow(self.0);
+                }
+            }
+        }
+        let hwnd = unsafe {
+            CreateWindowExW(
+                WINDOW_EX_STYLE(0),
+                w!("STATIC"),
+                w!("spike"),
+                WS_OVERLAPPED,
+                0,
+                0,
+                0,
+                0,
+                Some(HWND_MESSAGE),
+                None,
+                None,
+                None,
+            )
+            .unwrap()
+        };
+        let _g = Guard(hwnd);
+        register(hwnd, 77, &Hotkey { mods: 0, vk: 0x87 }).unwrap();
+        send(false);
+        let t0 = std::time::Instant::now();
+        let mut got = false;
+        while t0.elapsed() < Duration::from_secs(1) && !got {
+            let mut m = MSG::default();
+            while unsafe { PeekMessageW(&mut m, None, 0, 0, PM_REMOVE) }.as_bool() {
+                if m.message == WM_HOTKEY {
+                    got = true;
+                }
+                unsafe { DispatchMessageW(&m) };
+            }
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        let down = key_down(0x87);
+        send(true);
+        std::thread::sleep(Duration::from_millis(50));
+        let up = key_down(0x87);
+        assert!(got, "no WM_HOTKEY");
+        assert!(down, "key_down false while held");
+        assert!(!up, "key_down true after release");
+    }
     fn hk(mods: u32, vk: u32) -> Hotkey {
         Hotkey { mods, vk }
     }

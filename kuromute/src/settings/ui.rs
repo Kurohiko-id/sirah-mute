@@ -58,6 +58,8 @@ pub fn apply_lang(w: &MainWindow, lang: ResolvedLang) {
     s.set_talk_warn_enabled(i18n::t(lang, Key::TalkWarnEnabled).into());
     s.set_talk_warn_source(i18n::t(lang, Key::TalkWarnSource).into());
     s.set_talk_warn_note(i18n::t(lang, Key::TalkWarnNote).into());
+    s.set_cough_hold(i18n::t(lang, Key::CoughHold).into());
+    s.set_cough_note(i18n::t(lang, Key::CoughNote).into());
     s.set_sec_test(i18n::t(lang, Key::SecTest).into());
     s.set_test_label(i18n::t(lang, Key::TestLabel).into());
     s.set_test_button(i18n::t(lang, Key::TestButton).into());
