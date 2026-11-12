@@ -17,6 +17,7 @@ mod policy_config;
 mod prompt;
 mod settings;
 mod sound;
+mod stats;
 mod talk;
 mod tray;
 mod update;
@@ -67,6 +68,8 @@ fn main() {
         log!("config: adopted config.json from the MuteMic folder");
     }
     log::install_panic_hook();
+    stats::init();
+    stats::install_panic_hook();
     let code = match std::env::args().nth(1).as_deref() {
         Some("--list-devices") => {
             list_devices();

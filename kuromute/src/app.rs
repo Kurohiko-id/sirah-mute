@@ -424,6 +424,7 @@ impl State {
     fn rewatch(&mut self) {
         let new = self.audio.watch_mute(self.cfg.mic_id.as_deref());
         let old = std::mem::replace(&mut self.last_muted, new);
+        crate::stats::mute_state(new == Some(true));
         if new.is_none() {
             self.ind.hide_all();
         } else if let Some(muted) = indicator_change(old, new) {
@@ -632,6 +633,7 @@ impl State {
             sound::play(muted);
         }
         self.update_talk_watch();
+        crate::stats::mute_state(muted);
     }
 
     fn on_tray(&mut self, lp: LPARAM) {
@@ -984,6 +986,7 @@ pub fn run() -> i32 {
         let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
     }
     log!("start v{VERSION}");
+    crate::stats::start();
     let (cfg, can_save, note) = load_startup();
     let hwnd = match create_window() {
         Ok(h) => h,
@@ -1034,6 +1037,7 @@ pub fn run() -> i32 {
         }
     }
     STATE.with(|c| c.borrow_mut().take());
+    crate::stats::flush();
     log::write_sync("exit");
     0
 }
