@@ -214,12 +214,41 @@ pub fn load(path: &Path) -> LoadOutcome {
         Err(e) if e.kind() == io::ErrorKind::NotFound => return LoadOutcome::Missing,
         Err(e) => return LoadOutcome::Unreadable(e.to_string()),
     };
-    let bytes = bytes.strip_prefix(b"\xEF\xBB\xBF").unwrap_or(&bytes);
-    match serde_json::from_slice::<Config>(bytes) {
-        Ok(c) => LoadOutcome::Loaded(c.sanitized()),
-        Err(e) if e.is_io() => LoadOutcome::Unreadable(e.to_string()),
-        Err(_) => backup_corrupt(path),
+    match parse(&bytes) {
+        Some(c) => LoadOutcome::Loaded(c),
+        None => backup_corrupt(path),
     }
+}
+
+/// Read-only `load` for other readers: never renames a corrupt file (that's the core's job).
+/// `Ok(None)` = missing; `Err` = unreadable or corrupt.
+pub fn read(path: &Path) -> Result<Option<Config>, String> {
+    match fs::read(path) {
+        Ok(b) => parse(&b).map(Some).ok_or_else(|| "corrupt".into()),
+        Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(None),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+/// Parses config bytes (BOM allowed). A bad value for one key resets only that key;
+/// `None` only when the bytes aren't a JSON object.
+pub fn parse(bytes: &[u8]) -> Option<Config> {
+    let bytes = bytes.strip_prefix(b"\xEF\xBB\xBF").unwrap_or(bytes);
+    // ponytail: one trial deserialize per key (~30), microseconds; fine for a settings file
+    let serde_json::Value::Object(user) = serde_json::from_slice(bytes).ok()? else {
+        return None;
+    };
+    let mut merged = serde_json::to_value(Config::default()).ok()?;
+    for (k, v) in user {
+        let mut trial = merged.clone();
+        trial[k.as_str()] = v;
+        if serde_json::from_value::<Config>(trial.clone()).is_ok() {
+            merged = trial;
+        }
+    }
+    serde_json::from_value::<Config>(merged)
+        .ok()
+        .map(Config::sanitized)
 }
 
 fn backup_corrupt(path: &Path) -> LoadOutcome {
@@ -234,15 +263,22 @@ fn backup_corrupt(path: &Path) -> LoadOutcome {
 }
 
 pub fn save(path: &Path, cfg: &Config) -> io::Result<()> {
+    write_atomic(
+        path,
+        &serde_json::to_vec_pretty(cfg).map_err(io::Error::other)?,
+    )
+}
+
+/// Writes `<path>.tmp`, fsyncs, then renames over `path`, so readers never see a torn file.
+pub fn write_atomic(path: &Path, bytes: &[u8]) -> io::Result<()> {
     if let Some(dir) = path.parent() {
         fs::create_dir_all(dir)?;
     }
     let mut name = path.file_name().unwrap_or_default().to_os_string();
     name.push(".tmp");
     let tmp = path.with_file_name(name);
-    let json = serde_json::to_vec_pretty(cfg).map_err(io::Error::other)?;
     let mut f = fs::File::create(&tmp)?;
-    f.write_all(&json)?;
+    f.write_all(bytes)?;
     f.sync_all()?;
     drop(f);
     fs::rename(&tmp, path)
@@ -416,6 +452,52 @@ mod tests {
             LoadOutcome::Loaded(c) => assert_eq!(c.popup_scale, 1.5),
             o => panic!("{o:?}"),
         }
+        fs::remove_dir_all(&d).unwrap();
+    }
+    #[test]
+    fn bad_value_resets_only_that_key() {
+        for bad in [
+            r#""border_thickness": -1"#,
+            r#""popup_scale": "big""#,
+            r#""cough_hold_ms": 1e12"#,
+            r#""hotkey": "x""#,
+        ] {
+            let json = format!(r#"{{"mic_id": "{{0.0.1}}", "sound_enabled": true, {bad}}}"#);
+            let c = parse(json.as_bytes()).unwrap_or_else(|| panic!("{bad}"));
+            assert_eq!(c.mic_id.as_deref(), Some("{0.0.1}"), "{bad}");
+            assert!(c.sound_enabled, "{bad}");
+            let d = Config::default();
+            assert_eq!(
+                (c.border_thickness, c.popup_scale, c.cough_hold_ms, c.hotkey),
+                (d.border_thickness, d.popup_scale, d.cough_hold_ms, d.hotkey),
+                "{bad}"
+            );
+        }
+        let c = parse(br#"{"mic_id": 5, "border_thickness": 9}"#).unwrap();
+        assert_eq!((c.mic_id, c.border_thickness), (None, 9));
+        assert_eq!(parse(b"[1]"), None);
+        assert_eq!(parse(b"{broken"), None);
+    }
+    #[test]
+    fn load_keeps_good_keys_and_file() {
+        let d = tmp("onebad");
+        let p = d.join("config.json");
+        fs::write(&p, r#"{"mic_id": "{0.0.1}", "border_thickness": -1}"#).unwrap();
+        match load(&p) {
+            LoadOutcome::Loaded(c) => assert_eq!(c.mic_id.as_deref(), Some("{0.0.1}")),
+            o => panic!("{o:?}"),
+        }
+        assert!(p.exists() && !d.join("config.json.bad").exists());
+        fs::remove_dir_all(&d).unwrap();
+    }
+    #[test]
+    fn read_never_renames_corrupt_file() {
+        let d = tmp("ro");
+        let p = d.join("config.json");
+        assert_eq!(read(&p), Ok(None));
+        fs::write(&p, "{broken").unwrap();
+        assert!(read(&p).is_err());
+        assert!(p.exists() && !d.join("config.json.bad").exists());
         fs::remove_dir_all(&d).unwrap();
     }
     #[test]
