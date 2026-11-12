@@ -76,7 +76,6 @@ pub struct Changes {
     pub autostart: bool,
     pub talk: bool,
     pub others: bool,
-    pub cough: bool,
 }
 
 pub fn diff(o: &Config, n: &Config) -> Changes {
@@ -102,7 +101,6 @@ pub fn diff(o: &Config, n: &Config) -> Changes {
         talk: o.talk_warn_enabled != n.talk_warn_enabled
             || o.talk_warn_mic_id != n.talk_warn_mic_id,
         others: o.other_mics != n.other_mics || o.other_mics_position != n.other_mics_position,
-        cough: o.cough_hold != n.cough_hold || o.cough_hold_ms != n.cough_hold_ms,
     }
 }
 
@@ -485,7 +483,6 @@ impl State {
         };
     }
 
-    /// Re-targets the mute watch (replug / mic change) and syncs indicators + tray.
     /// Watches the talk-warn mic's meter only while the mic is muted and the
     /// feature is configured. Activation is a COM call: never before `log_latency`.
     fn update_talk_watch(&mut self) {
@@ -526,6 +523,7 @@ impl State {
         self.arm(TIMER_TALK, TALK_POLL_MS);
     }
 
+    /// Re-targets the mute watch (replug / mic change) and syncs indicators + tray.
     fn rewatch(&mut self) {
         let new = self.audio.watch_mute(self.cfg.mic_id.as_deref());
         let old = std::mem::replace(&mut self.last_muted, new);
@@ -1463,22 +1461,6 @@ mod tests {
             diff(&a, &b),
             Changes {
                 others: true,
-                ..Default::default()
-            }
-        );
-    }
-
-    #[test]
-    fn diff_cough_flags_cough() {
-        let a = Config::default();
-        let b = Config {
-            cough_hold_ms: 900,
-            ..a.clone()
-        };
-        assert_eq!(
-            diff(&a, &b),
-            Changes {
-                cough: true,
                 ..Default::default()
             }
         );
