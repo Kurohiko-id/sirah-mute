@@ -58,7 +58,9 @@ pub enum Choice {
 
 impl Choice {
     pub fn from_wparam(w: usize) -> Option<Self> {
-        [Choice::SwitchBack, Choice::Keep, Choice::Snooze].get(w).copied()
+        [Choice::SwitchBack, Choice::Keep, Choice::Snooze]
+            .get(w)
+            .copied()
     }
 }
 
@@ -185,17 +187,23 @@ pub fn show(mon: &Monitor, lang: ResolvedLang, title: Key, rows: &[Row]) -> Resu
     unsafe {
         let dc = CreateCompatibleDC(None);
         let mut bits = std::ptr::null_mut();
-        let bmp = CreateDIBSection(Some(dc), &bmi, DIB_RGB_COLORS, &mut bits, None, 0)?;
+        let bmp = match CreateDIBSection(Some(dc), &bmi, DIB_RGB_COLORS, &mut bits, None, 0) {
+            Ok(b) => b,
+            Err(e) => {
+                let _ = DeleteDC(dc);
+                return Err(e);
+            }
+        };
         let old = SelectObject(dc, bmp.into());
-        let drawn = paint(&r, dc, (wi, hi), k, lang, title, rows);
-        if drawn.is_ok() {
+        let shown = paint(&r, dc, (wi, hi), k, lang, title, rows).and_then(|hits| {
             let blend = BLENDFUNCTION {
                 BlendOp: AC_SRC_OVER as u8,
                 BlendFlags: 0,
                 SourceConstantAlpha: 255,
                 AlphaFormat: AC_SRC_ALPHA as u8,
             };
-            let _ = UpdateLayeredWindow(
+            // Propagated so the caller falls back to the balloon instead of an invisible prompt.
+            UpdateLayeredWindow(
                 hwnd,
                 None,
                 Some(&pos),
@@ -205,7 +213,8 @@ pub fn show(mon: &Monitor, lang: ResolvedLang, title: Key, rows: &[Row]) -> Resu
                 COLORREF(0),
                 Some(&blend),
                 ULW_ALPHA,
-            );
+            )?;
+            BUTTONS.with(|b| b.set(hits));
             let _ = SetWindowPos(
                 hwnd,
                 Some(HWND_TOPMOST),
@@ -215,11 +224,12 @@ pub fn show(mon: &Monitor, lang: ResolvedLang, title: Key, rows: &[Row]) -> Resu
                 0,
                 SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW,
             );
-        }
+            Ok(())
+        });
         SelectObject(dc, old);
         let _ = DeleteObject(bmp.into());
         let _ = DeleteDC(dc);
-        drawn?;
+        shown?;
     }
     Ok(prompt)
 }
@@ -232,7 +242,7 @@ fn paint(
     lang: ResolvedLang,
     title: Key,
     rows: &[Row],
-) -> Result<()> {
+) -> Result<[Rect; 3]> {
     let (wf, hf) = (wi as f32, hi as f32);
     let px = |v: f32| v * k;
     let lead = DWRITE_TEXT_ALIGNMENT_LEADING;
@@ -251,7 +261,8 @@ fn paint(
     let icon = r.format_w(r.icon_family, px(17.0), DWRITE_FONT_WEIGHT_NORMAL, lead)?;
     let head = r.format_w(w!("Segoe UI"), px(15.0), DWRITE_FONT_WEIGHT_SEMI_BOLD, lead)?;
     let label = r.format_w(w!("Segoe UI"), px(13.0), DWRITE_FONT_WEIGHT_NORMAL, lead)?;
-    let name = one_line(r.format_w(w!("Segoe UI"), px(13.0), DWRITE_FONT_WEIGHT_SEMI_BOLD, lead)?)?;
+    let name =
+        one_line(r.format_w(w!("Segoe UI"), px(13.0), DWRITE_FONT_WEIGHT_SEMI_BOLD, lead)?)?;
     let btn = r.format_w(
         w!("Segoe UI"),
         px(13.0),
@@ -336,7 +347,9 @@ fn paint(
     for (i, lk) in labels.into_iter().enumerate() {
         let x = pad + i as f32 * (bw + gap);
         let b = rrect(x, y, x + bw, y + bh, px(7.0));
-        unsafe { r.rt.FillRoundedRectangle(&b, &brush(if i == 0 { &RED } else { &BTN })?) };
+        unsafe {
+            r.rt.FillRoundedRectangle(&b, &brush(if i == 0 { &RED } else { &BTN })?)
+        };
         text(t(lang, lk), &btn, &FG, b.rect)?;
         hits[i] = Rect {
             left: x as i32,
@@ -345,8 +358,8 @@ fn paint(
             bottom: (y + bh) as i32,
         };
     }
-    BUTTONS.with(|b| b.set(hits));
-    unsafe { r.rt.EndDraw(None, None) }
+    unsafe { r.rt.EndDraw(None, None)? };
+    Ok(hits)
 }
 
 #[cfg(test)]
