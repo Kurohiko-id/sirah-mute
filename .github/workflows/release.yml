@@ -26,6 +26,9 @@ jobs:
           $cargo = (Select-String -Path kuromute/Cargo.toml -Pattern '^version = "(.+)"').Matches[0].Groups[1].Value
           if ($v -ne $cargo) { throw "tag $env:VERSION does not match Cargo.toml version $cargo" }
           "VER=$v" >> $env:GITHUB_ENV
+          # panic messages carry source paths (sent by usage stats): keep the runner's user folder out of the exe
+          $cargoHome = if ($env:CARGO_HOME) { $env:CARGO_HOME } else { "$env:USERPROFILE\.cargo" }
+          "RUSTFLAGS=--remap-path-prefix=$env:USERPROFILE=~ --remap-path-prefix=$cargoHome=cargo" >> $env:GITHUB_ENV
 
       - name: Test
         working-directory: kuromute
@@ -34,6 +37,11 @@ jobs:
       - name: Build
         working-directory: kuromute
         run: cargo build --release --locked
+
+      - name: No user paths in exe
+        run: |
+          $bin = [IO.File]::ReadAllText("$pwd\kuromute\target\release\sirahmute.exe", [Text.Encoding]::Latin1)
+          if ($bin.Contains('C:\Users\')) { throw 'sirahmute.exe contains a C:\Users\ path' }
 
       - name: Installer
         run: |
