@@ -1,7 +1,7 @@
 use windows::Win32::Foundation::{CloseHandle, ERROR_ALREADY_EXISTS, GetLastError, HANDLE};
 use windows::Win32::System::Threading::CreateMutexW;
 use windows::Win32::UI::WindowsAndMessaging::{
-    FindWindowW, SW_RESTORE, SetForegroundWindow, ShowWindow,
+    FindWindowW, IsIconic, SW_RESTORE, SetForegroundWindow, ShowWindow,
 };
 use windows::core::PCWSTR;
 
@@ -35,15 +35,25 @@ pub fn acquire() -> Option<SingleGuard> {
         };
         if GetLastError() == ERROR_ALREADY_EXISTS {
             let _ = CloseHandle(h);
-            // No window yet means the other instance is still starting; nothing to raise.
-            let title = wide(WINDOW_TITLE);
-            if let Ok(hwnd) = FindWindowW(PCWSTR::null(), PCWSTR(title.as_ptr())) {
-                let _ = ShowWindow(hwnd, SW_RESTORE);
-                let _ = SetForegroundWindow(hwnd);
-            }
+            raise();
             return None;
         }
         Some(SingleGuard(Some(h)))
+    }
+}
+
+/// Bring the open settings window to the front (restore only if minimized, so a maximized
+/// window stays maximized). No window yet = the instance is still starting; nothing to raise.
+/// Works from the core because it is foreground right after a tray-menu pick.
+pub fn raise() {
+    let title = wide(WINDOW_TITLE);
+    unsafe {
+        if let Ok(hwnd) = FindWindowW(PCWSTR::null(), PCWSTR(title.as_ptr())) {
+            if IsIconic(hwnd).as_bool() {
+                let _ = ShowWindow(hwnd, SW_RESTORE);
+            }
+            let _ = SetForegroundWindow(hwnd);
+        }
     }
 }
 

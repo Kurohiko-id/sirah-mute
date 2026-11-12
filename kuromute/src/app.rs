@@ -734,6 +734,7 @@ impl State {
         if let Some(c) = self.settings_child.as_mut()
             && matches!(c.try_wait(), Ok(None))
         {
+            crate::settings::single::raise();
             return;
         }
         match std::env::current_exe().and_then(|exe| Command::new(exe).arg("--settings").spawn()) {
