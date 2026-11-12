@@ -1,5 +1,5 @@
 use crate::enforcer::Defaults;
-use crate::msg::{WM_APP_DEVICES, WM_APP_MUTE};
+use crate::msg::{WM_APP_DEVICES, WM_APP_MUTE, WM_APP_OTHERS};
 use crate::policy_config::{CLSID_POLICY_CONFIG, IPolicyConfig};
 use windows::Win32::Devices::FunctionDiscovery::PKEY_Device_FriendlyName;
 use windows::Win32::Foundation::{HWND, LPARAM, PROPERTYKEY, WPARAM};
@@ -83,10 +83,25 @@ impl IAudioEndpointVolumeCallback_Impl for MuteNotify_Impl {
     }
 }
 
+#[implement(IAudioEndpointVolumeCallback)]
+struct OtherNotify {
+    hwnd: isize,
+}
+
+impl IAudioEndpointVolumeCallback_Impl for OtherNotify_Impl {
+    fn OnNotify(&self, _: *mut AUDIO_VOLUME_NOTIFICATION_DATA) -> Result<()> {
+        post(self.hwnd, WM_APP_OTHERS, 0);
+        Ok(())
+    }
+}
+
+type Watched = (String, IAudioEndpointVolume, IAudioEndpointVolumeCallback);
+
 pub struct Audio {
     enumerator: IMMDeviceEnumerator,
     notify: IMMNotificationClient,
     volume: Option<(IAudioEndpointVolume, IAudioEndpointVolumeCallback)>,
+    others: Vec<Watched>,
     hwnd: isize,
 }
 
@@ -128,6 +143,7 @@ impl Audio {
                 enumerator,
                 notify,
                 volume: None,
+                others: Vec::new(),
                 hwnd,
             })
         }
@@ -216,6 +232,64 @@ impl Audio {
         }
     }
 
+    /// Sets mute on the main watched device.
+    #[allow(dead_code)] // consumed by the cough-hold task
+    pub fn set_mute(&self, muted: bool) -> Result<()> {
+        let Some((vol, _)) = &self.volume else {
+            return Err(windows::Win32::Foundation::E_POINTER.into());
+        };
+        unsafe { vol.SetMute(muted, std::ptr::null()) }
+    }
+
+    fn unwatch_others(&mut self) {
+        for (_, vol, cb) in self.others.drain(..) {
+            unsafe {
+                let _ = vol.UnregisterControlChangeNotify(&cb);
+            }
+        }
+    }
+
+    /// Replaces the watched set of other mics; absent or inactive ids are skipped.
+    #[allow(dead_code)] // consumed by the others-pill task
+    pub fn watch_others(&mut self, ids: &[String]) {
+        self.unwatch_others();
+        for id in ids {
+            let Ok(dev) = self.device(id) else { continue };
+            unsafe {
+                if dev.GetState().ok() != Some(DEVICE_STATE_ACTIVE) {
+                    continue;
+                }
+                let Ok(vol) = dev.Activate::<IAudioEndpointVolume>(CLSCTX_ALL, None) else {
+                    continue;
+                };
+                let cb: IAudioEndpointVolumeCallback = OtherNotify { hwnd: self.hwnd }.into();
+                if vol.RegisterControlChangeNotify(&cb).is_ok() {
+                    self.others.push((id.clone(), vol, cb));
+                }
+            }
+        }
+    }
+
+    /// Mute state of each watched other mic, in `watch_others` order.
+    #[allow(dead_code)] // consumed by the others-pill task
+    pub fn others_muted(&self) -> Vec<(String, bool)> {
+        self.others
+            .iter()
+            .filter_map(|(id, vol, _)| {
+                let m = unsafe { vol.GetMute() }.ok()?.as_bool();
+                Some((id.clone(), m))
+            })
+            .collect()
+    }
+
+    #[allow(dead_code)] // consumed by the others-pill task
+    pub fn set_other_mute(&self, id: &str, muted: bool) -> Result<()> {
+        let Some((_, vol, _)) = self.others.iter().find(|(i, _, _)| i == id) else {
+            return Err(windows::Win32::Foundation::E_INVALIDARG.into());
+        };
+        unsafe { vol.SetMute(muted, std::ptr::null()) }
+    }
+
     pub fn defaults(&self, input_id: Option<&str>, output_id: Option<&str>) -> Defaults {
         let get = |flow: EDataFlow| -> [Option<String>; 3] {
             ROLES.map(|role| unsafe {
@@ -237,6 +311,7 @@ impl Audio {
 impl Drop for Audio {
     fn drop(&mut self) {
         self.unwatch();
+        self.unwatch_others();
         unsafe {
             let _ = self
                 .enumerator
@@ -262,5 +337,28 @@ pub fn set_default(id: &str) -> Result<()> {
             CoUninitialize();
         }
         res
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use windows::Win32::System::Com::COINIT_APARTMENTTHREADED;
+
+    #[test]
+    #[ignore] // touches real audio devices (read-only)
+    fn others_watch_smoke() {
+        unsafe {
+            let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
+        }
+        let mut a = Audio::new(HWND::default()).unwrap();
+        let ids: Vec<String> = a
+            .list(Flow::Capture)
+            .into_iter()
+            .take(2)
+            .map(|d| d.id)
+            .collect();
+        a.watch_others(&ids);
+        assert!(a.others_muted().len() <= 2);
     }
 }
