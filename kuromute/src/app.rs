@@ -819,6 +819,7 @@ impl State {
 
     /// Explicit set (not toggle) for the CLI; indicators follow via the normal WM_APP_MUTE path.
     fn remote_mute(&mut self, muted: bool) -> bool {
+        self.stop_cough(); // an explicit set wins over a held cough key's release
         match self.audio.set_mute(muted) {
             Ok(()) => true,
             Err(e) => {
@@ -1052,6 +1053,7 @@ impl State {
             WM_APP_TRAY => self.on_tray(lp),
             WM_APP_DRIFT_CHOICE => self.on_drift_choice(wp.0),
             WM_APP_PILL_CLICK if wp.0 == 0 => {
+                self.stop_cough(); // the click wins over a held cough key's release
                 if self.last_muted == Some(true)
                     && let Err(e) = self.audio.set_mute(false)
                 {
