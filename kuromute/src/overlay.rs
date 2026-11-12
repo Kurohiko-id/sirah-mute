@@ -36,7 +36,7 @@ use windows::Win32::Graphics::Gdi::{
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::UI::WindowsAndMessaging::{
     BeginDeferWindowPos, CreateWindowExW, DefWindowProcW, DeferWindowPos, DestroyWindow,
-    EndDeferWindowPos, FindWindowW, GWLP_USERDATA, GetWindowLongPtrW, HTCLIENT, HTTRANSPARENT,
+    EndDeferWindowPos, FindWindowW, GWL_EXSTYLE, GetWindowLongPtrW, HTTRANSPARENT,
     HWND_TOPMOST, IDC_HAND, KillTimer, LWA_ALPHA, LoadCursorW, MA_NOACTIVATE, PostMessageW,
     RegisterClassExW, SET_WINDOW_POS_FLAGS, SWP_HIDEWINDOW, SetCursor, SetWindowLongPtrW,
     WM_LBUTTONUP, WM_SETCURSOR,
@@ -96,13 +96,21 @@ pub(crate) unsafe extern "system" fn wndproc(h: HWND, m: u32, wp: WPARAM, lp: LP
     }
 }
 
-/// Pill hit test: clickable while the muted pill shows, click-through otherwise
-/// (so clicks during the brief "Mic on" pill reach the game).
-pub fn pill_hit(muted_shown: bool) -> u32 {
-    if muted_shown {
-        HTCLIENT
-    } else {
-        HTTRANSPARENT as u32
+/// Whether a popup is click-through: the Card always, the Pill unless the muted
+/// pill shows (so clicks during the brief "Mic on" pill reach the game). Done with
+/// WS_EX_TRANSPARENT: HTTRANSPARENT only passes clicks to the same thread's windows.
+pub fn click_through(style: PopupStyle, muted_shown: bool) -> bool {
+    style == PopupStyle::Card || !muted_shown
+}
+
+fn set_click_through(h: HWND, on: bool) {
+    let t = WS_EX_TRANSPARENT.0 as isize;
+    unsafe {
+        let ex = GetWindowLongPtrW(h, GWL_EXSTYLE);
+        let new = if on { ex | t } else { ex & !t };
+        if new != ex {
+            SetWindowLongPtrW(h, GWL_EXSTYLE, new);
+        }
     }
 }
 
@@ -130,10 +138,6 @@ unsafe extern "system" fn pill_proc(h: HWND, m: u32, wp: WPARAM, lp: LPARAM) -> 
         return r;
     }
     match m {
-        WM_NCHITTEST => {
-            let shown = unsafe { GetWindowLongPtrW(h, GWLP_USERDATA) } != 0;
-            LRESULT(pill_hit(shown) as isize)
-        }
         WM_LBUTTONUP => {
             post_to_core(crate::msg::WM_APP_PILL_CLICK, 0, 0);
             LRESULT(0)
@@ -454,7 +458,7 @@ impl Popup {
         };
         unsafe {
             // Pill is clickable only while the muted pill (slot 1/2) shows.
-            SetWindowLongPtrW(self.hwnd, GWLP_USERDATA, (slot > 0) as isize);
+            set_click_through(self.hwnd, click_through(self.style, slot > 0));
             SelectObject(self.dc, self.bmp[slot].into());
             let _ = UpdateLayeredWindow(
                 self.hwnd,
@@ -481,7 +485,7 @@ impl Popup {
 
     fn hide(&self) {
         unsafe {
-            SetWindowLongPtrW(self.hwnd, GWLP_USERDATA, 0);
+            set_click_through(self.hwnd, true);
             let _ = SetWindowPos(
                 self.hwnd,
                 None,
@@ -651,7 +655,7 @@ impl Renderer {
             ..Default::default()
         };
         let hwnd = match style {
-            PopupStyle::Pill => create_window(PILL_CLASS, rect, false)?,
+            PopupStyle::Pill => create_window(PILL_CLASS, rect, true)?, // starts hidden
             PopupStyle::Card => create_window(POPUP_CLASS, rect, true)?,
         };
         let mut p = Popup {
@@ -1190,9 +1194,11 @@ mod tests {
     use super::*;
 
     #[test]
-    fn pill_hit_transparent_unless_muted() {
-        assert_eq!(pill_hit(true), HTCLIENT);
-        assert_eq!(pill_hit(false), HTTRANSPARENT as u32);
+    fn click_through_unless_muted_pill() {
+        assert!(!click_through(PopupStyle::Pill, true));
+        assert!(click_through(PopupStyle::Pill, false));
+        assert!(click_through(PopupStyle::Card, true));
+        assert!(click_through(PopupStyle::Card, false));
     }
 
     #[test]
