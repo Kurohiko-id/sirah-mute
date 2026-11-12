@@ -23,6 +23,9 @@ pub struct State {
     /// Re-shows controls after a save pulled in values from disk. The core itself only changes
     /// `guard_enabled` (tray menu), which lives on the Device tab.
     pub reshow: Option<Rc<dyn Fn()>>,
+    /// config.json couldn't be read when the window opened, so the controls show defaults.
+    /// Saving is refused for this session: merging stale defaults would overwrite real values.
+    stale: bool,
 }
 
 /// Read-only read of config.json; never renames a bad file. If it can't be read, asks the core
@@ -36,15 +39,17 @@ fn read_config() -> Result<Option<Config>, String> {
 }
 
 fn load_state() -> State {
-    let cfg = read_config().unwrap_or_else(|e| {
+    let read = read_config();
+    if let Err(e) = &read {
         crate::log!("settings: config not readable at startup ({e}); showing defaults");
-        None
-    });
-    let cfg = cfg.unwrap_or_default();
+    }
+    let stale = read.is_err();
+    let cfg = read.ok().flatten().unwrap_or_default();
     State {
         base: cfg.clone(),
         cfg,
         reshow: None,
+        stale,
     }
 }
 
@@ -180,11 +185,15 @@ pub fn send_to_core(name: PCWSTR, wp: usize, lp: isize) -> Option<(isize, bool)>
 /// Takes the RefCell, not a borrow: the borrow is released before SendMessageTimeoutW, which
 /// pumps sent messages and could re-enter other callbacks.
 pub fn commit(state: &RefCell<State>, w: &MainWindow) -> SaveOutcome {
-    let (ours, base) = {
+    let (ours, base, stale) = {
         let s = state.borrow();
-        (s.cfg.clone(), s.base.clone())
+        (s.cfg.clone(), s.base.clone(), s.stale)
     };
     let lang = i18n::resolve(ours.language);
+    if stale {
+        w.set_save_error(i18n::t(lang, Key::SaveBlocked).into());
+        return SaveOutcome::Blocked;
+    }
     let disk = read_config();
     let load_ok = disk.is_ok();
     // missing file: nothing to keep, so merging onto `base` gives `ours`
