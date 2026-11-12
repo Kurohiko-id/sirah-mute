@@ -4,7 +4,7 @@ use std::time::{Duration, Instant};
 
 const WINDOW: Duration = Duration::from_secs(60);
 const MAX_REVERTS: usize = 5;
-const PAUSE: Duration = Duration::from_secs(300);
+pub(crate) const PAUSE: Duration = Duration::from_secs(300);
 
 /// Arrays indexed console, multimedia, communications.
 /// `*_present` = the locked device is active.

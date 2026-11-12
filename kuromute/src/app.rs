@@ -1,7 +1,7 @@
 //! Core app: hidden window, message loop and all runtime state.
 
 use crate::config::{self, Config, LoadOutcome, config_path};
-use crate::enforcer::{Action, Enforcer};
+use crate::enforcer::{self, Action, Enforcer};
 use crate::i18n::{self, Key, ResolvedLang, t};
 use crate::msg::*;
 use crate::others::OtherPills;
@@ -643,9 +643,13 @@ impl State {
             }
             Action::Notify { .. } => {}
             Action::GiveUp => {
-                log!("guard: giving up for 5 minutes");
+                log!("guard: giving up for {}s", enforcer::PAUSE.as_secs());
                 self.balloon(t(self.lang, Key::GuardPaused));
-                self.arm(TIMER_GUARD_RESUME, 300_000);
+                // +1 s so the timer never fires before the enforcer's pause ends.
+                self.arm(
+                    TIMER_GUARD_RESUME,
+                    enforcer::PAUSE.as_millis() as u32 + 1000,
+                );
             }
         }
     }
@@ -758,6 +762,11 @@ impl State {
         }
         self.apply_autostart();
         spawn_update_check(self.hwnd, false);
+        // Endpoint notifications don't replay current state: act on a drift
+        // that happened while the app was off (force_on_startup already reverts).
+        if !self.cfg.force_on_startup {
+            self.guard_check();
+        }
     }
 
     fn stop_cough(&mut self) {
