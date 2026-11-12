@@ -30,6 +30,11 @@ fn short_name(s: &str) -> String {
     s.trim().chars().take(OTHER_NAME_MAX).collect()
 }
 
+/// Name after a device swap: follow the new device unless the user typed their own.
+fn follow_name(cur: &str, old_auto: Option<&str>, new_auto: &str) -> Option<String> {
+    (cur.trim().is_empty() || Some(cur) == old_auto).then(|| new_auto.to_string())
+}
+
 /// Dropdown contents shared by every row; re-read when the tab opens.
 #[derive(Default)]
 struct Devices {
@@ -163,7 +168,21 @@ pub fn setup(w: &MainWindow, state: &Rc<RefCell<State>>, sink: HWND) -> Rc<dyn F
     let (ww, st, devs2, show2) = (w.as_weak(), state.clone(), devs.clone(), show.clone());
     w.on_other_device(move |i, d| {
         let Some(w) = ww.upgrade() else { return };
-        let id = devs2.borrow().ids.get(d as usize).cloned();
+        let (id, new_auto, autos) = {
+            let dv = devs2.borrow();
+            let auto = |i: usize| short_name(&dv.names[i]);
+            let autos: Vec<(String, String)> = dv
+                .ids
+                .iter()
+                .enumerate()
+                .map(|(n, id)| (id.clone(), auto(n)))
+                .collect();
+            (
+                dv.ids.get(d as usize).cloned(),
+                dv.ids.get(d as usize).map(|_| auto(d as usize)),
+                autos,
+            )
+        };
         let changed = {
             let mut s = st.borrow_mut();
             let taken = id.as_ref().is_some_and(|id| {
@@ -175,16 +194,25 @@ pub fn setup(w: &MainWindow, state: &Rc<RefCell<State>>, sink: HWND) -> Rc<dyn F
             });
             match (id, s.cfg.other_mics.get_mut(i as usize)) {
                 (Some(id), Some(m)) if !taken && m.id != id => {
+                    let old_auto = autos
+                        .iter()
+                        .find(|(i, _)| *i == m.id)
+                        .map(|(_, n)| n.as_str());
+                    if let Some(n) = new_auto
+                        .as_deref()
+                        .and_then(|na| follow_name(&m.name, old_auto, na))
+                    {
+                        m.name = n;
+                    }
                     m.id = id;
                     true
                 }
                 _ => false,
             }
         };
+        show2(&w); // snap back on refusal, or show the followed name
         if changed {
             commit(&st, &w);
-        } else {
-            show2(&w);
         }
     });
 
@@ -247,6 +275,16 @@ mod tests {
         let all = ids(&["a", "b", "c"]);
         assert_eq!(next_free(&all, Some("b"), &ids(&["a"])), Some("c".into()));
         assert_eq!(next_free(&all, Some("b"), &ids(&["a", "c"])), None);
+    }
+
+    #[test]
+    fn name_follows_device_unless_custom() {
+        assert_eq!(
+            follow_name("Steam", Some("Steam"), "PD400X"),
+            Some("PD400X".into())
+        );
+        assert_eq!(follow_name("", None, "PD400X"), Some("PD400X".into()));
+        assert_eq!(follow_name("Podcast", Some("Steam"), "PD400X"), None);
     }
 
     #[test]
