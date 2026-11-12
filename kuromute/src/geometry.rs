@@ -38,7 +38,6 @@ pub fn popup_rect(work: Rect, pos: Position, style: PopupStyle, scale: f32, dpi:
 /// Screen rects of a row of pills (widths in order) at `pos` in `work`. When the
 /// main popup sits at the same position (`main` = its position and height), the
 /// row moves that height + gap away from the screen edge so the two never overlap.
-#[allow(clippy::too_many_arguments)]
 pub fn pill_row(
     widths: &[i32],
     gap: i32,

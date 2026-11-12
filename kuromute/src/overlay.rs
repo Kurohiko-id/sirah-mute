@@ -58,9 +58,9 @@ const PILL_CLASS: PCWSTR = w!("SirahMutePill");
 const BORDER_CLASS: PCWSTR = w!("SirahMuteBorder");
 const BORDER_COLOR: COLORREF = COLORREF(0x004D_48E5); // #E5484D as 0x00BBGGRR
 pub(crate) const BORDER_RGB: u32 = 0xE5484D;
-const GLYPH_MUTED: &str = "\u{E74F}"; // MicOff (OverlayForm.cs:88)
-const GLYPH_UNMUTED: &str = "\u{E720}"; // Microphone
-pub(crate) const GLYPH_MIC_OFF: &str = "\u{EC54}"; // MicOff (pill style)
+const GLYPH_CARD_MUTED: &str = "\u{E74F}"; // Mute (card style)
+const GLYPH_MIC_ON: &str = "\u{E720}"; // Microphone
+pub(crate) const GLYPH_PILL_MUTED: &str = "\u{EC54}"; // MicOff (pill style)
 const PILL_MUTED: &str = "Mic mute";
 const PILL_UNMUTED: &str = "Mic on";
 
@@ -378,8 +378,8 @@ impl Popup {
         muted_secs: Option<u64>,
     ) -> Result<()> {
         let (glyph, text) = match muted_secs {
-            Some(s) => (GLYPH_MUTED, muted_text(lang, s)),
-            None => (GLYPH_UNMUTED, t(lang, Key::Unmuted).to_string()),
+            Some(s) => (GLYPH_CARD_MUTED, muted_text(lang, s)),
+            None => (GLYPH_MIC_ON, t(lang, Key::Unmuted).to_string()),
         };
         let text = text.as_str();
         unsafe {
@@ -425,14 +425,14 @@ impl Popup {
         let clock = muted_secs.map(fmt_elapsed);
         let p = match muted_secs {
             Some(_) => PillText {
-                glyph: GLYPH_MIC_OFF,
+                glyph: GLYPH_PILL_MUTED,
                 label: PILL_MUTED,
                 clock: clock.as_deref(),
                 accent: MUTE_RED,
                 edge: rgb(BORDER_RGB, 0.8),
             },
             None => PillText {
-                glyph: GLYPH_UNMUTED,
+                glyph: GLYPH_MIC_ON,
                 label: PILL_UNMUTED,
                 clock: None,
                 accent: FG,
@@ -463,7 +463,7 @@ impl Popup {
             // Pill is clickable only while the muted pill (slot 1/2) shows.
             set_click_through(self.hwnd, click_through(self.style, slot > 0));
             SelectObject(self.dc, self.bmp[slot].into());
-            let _ = UpdateLayeredWindow(
+            if let Err(e) = UpdateLayeredWindow(
                 self.hwnd,
                 None,
                 Some(&dst),
@@ -473,7 +473,9 @@ impl Popup {
                 COLORREF(0),
                 Some(&blend),
                 ULW_ALPHA,
-            );
+            ) {
+                crate::log::write(format!("overlay: popup update failed: {e}"));
+            }
             let _ = SetWindowPos(
                 self.hwnd,
                 Some(HWND_TOPMOST),

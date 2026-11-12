@@ -58,7 +58,9 @@ pub enum Choice {
 
 impl Choice {
     pub fn from_wparam(w: usize) -> Option<Self> {
-        [Choice::SwitchBack, Choice::Keep, Choice::Snooze].get(w).copied()
+        [Choice::SwitchBack, Choice::Keep, Choice::Snooze]
+            .get(w)
+            .copied()
     }
 }
 
@@ -70,16 +72,20 @@ pub struct Row {
 }
 
 thread_local! {
-    /// Button hit boxes of the visible prompt, window-relative. Only one prompt exists at a time.
-    static BUTTONS: Cell<[Rect; 3]> = const { Cell::new([NO_RECT; 3]) };
+    /// Owner hwnd and button hit boxes (window-relative) of the visible prompt. Keyed by hwnd so
+    /// dropping an older prompt can't wipe a newer one's boxes.
+    static BUTTONS: Cell<(HWND, [Rect; 3])> =
+        const { Cell::new((HWND(std::ptr::null_mut()), [NO_RECT; 3])) };
 }
 
-fn button_at(x: i32, y: i32) -> Option<usize> {
-    BUTTONS.with(|b| {
-        b.get()
-            .iter()
-            .position(|r| x >= r.left && x < r.right && y >= r.top && y < r.bottom)
-    })
+fn button_at(h: HWND, x: i32, y: i32) -> Option<usize> {
+    let (owner, rects) = BUTTONS.with(Cell::get);
+    if owner != h {
+        return None;
+    }
+    rects
+        .iter()
+        .position(|r| x >= r.left && x < r.right && y >= r.top && y < r.bottom)
 }
 
 unsafe extern "system" fn wndproc(h: HWND, m: u32, wp: WPARAM, lp: LPARAM) -> LRESULT {
@@ -90,7 +96,7 @@ unsafe extern "system" fn wndproc(h: HWND, m: u32, wp: WPARAM, lp: LPARAM) -> LR
             let mut pt = POINT::default();
             let _ = GetCursorPos(&mut pt);
             let _ = ScreenToClient(h, &mut pt);
-            let id = if button_at(pt.x, pt.y).is_some() {
+            let id = if button_at(h, pt.x, pt.y).is_some() {
                 IDC_HAND
             } else {
                 IDC_ARROW
@@ -100,7 +106,7 @@ unsafe extern "system" fn wndproc(h: HWND, m: u32, wp: WPARAM, lp: LPARAM) -> LR
         },
         WM_LBUTTONUP => {
             let (x, y) = (lp.0 as i16 as i32, (lp.0 >> 16) as i16 as i32);
-            if let (Some(i), Ok(c)) = (button_at(x, y), core()) {
+            if let (Some(i), Ok(c)) = (button_at(h, x, y), core()) {
                 let _ = unsafe { PostMessageW(Some(c), WM_APP_DRIFT_CHOICE, WPARAM(i), LPARAM(0)) };
             }
             LRESULT(0)
@@ -122,7 +128,11 @@ pub struct Prompt {
 
 impl Drop for Prompt {
     fn drop(&mut self) {
-        BUTTONS.with(|b| b.set([NO_RECT; 3]));
+        BUTTONS.with(|b| {
+            if b.get().0 == self.hwnd {
+                b.set((HWND(std::ptr::null_mut()), [NO_RECT; 3]));
+            }
+        });
         let _ = unsafe { DestroyWindow(self.hwnd) };
     }
 }
@@ -185,17 +195,23 @@ pub fn show(mon: &Monitor, lang: ResolvedLang, title: Key, rows: &[Row]) -> Resu
     unsafe {
         let dc = CreateCompatibleDC(None);
         let mut bits = std::ptr::null_mut();
-        let bmp = CreateDIBSection(Some(dc), &bmi, DIB_RGB_COLORS, &mut bits, None, 0)?;
+        let bmp = match CreateDIBSection(Some(dc), &bmi, DIB_RGB_COLORS, &mut bits, None, 0) {
+            Ok(b) => b,
+            Err(e) => {
+                let _ = DeleteDC(dc);
+                return Err(e);
+            }
+        };
         let old = SelectObject(dc, bmp.into());
-        let drawn = paint(&r, dc, (wi, hi), k, lang, title, rows);
-        if drawn.is_ok() {
+        let shown = paint(&r, dc, (wi, hi), k, lang, title, rows).and_then(|hits| {
             let blend = BLENDFUNCTION {
                 BlendOp: AC_SRC_OVER as u8,
                 BlendFlags: 0,
                 SourceConstantAlpha: 255,
                 AlphaFormat: AC_SRC_ALPHA as u8,
             };
-            let _ = UpdateLayeredWindow(
+            // Propagated so the caller falls back to the balloon instead of an invisible prompt.
+            UpdateLayeredWindow(
                 hwnd,
                 None,
                 Some(&pos),
@@ -205,7 +221,8 @@ pub fn show(mon: &Monitor, lang: ResolvedLang, title: Key, rows: &[Row]) -> Resu
                 COLORREF(0),
                 Some(&blend),
                 ULW_ALPHA,
-            );
+            )?;
+            BUTTONS.with(|b| b.set((hwnd, hits)));
             let _ = SetWindowPos(
                 hwnd,
                 Some(HWND_TOPMOST),
@@ -215,11 +232,12 @@ pub fn show(mon: &Monitor, lang: ResolvedLang, title: Key, rows: &[Row]) -> Resu
                 0,
                 SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW,
             );
-        }
+            Ok(())
+        });
         SelectObject(dc, old);
         let _ = DeleteObject(bmp.into());
         let _ = DeleteDC(dc);
-        drawn?;
+        shown?;
     }
     Ok(prompt)
 }
@@ -232,7 +250,7 @@ fn paint(
     lang: ResolvedLang,
     title: Key,
     rows: &[Row],
-) -> Result<()> {
+) -> Result<[Rect; 3]> {
     let (wf, hf) = (wi as f32, hi as f32);
     let px = |v: f32| v * k;
     let lead = DWRITE_TEXT_ALIGNMENT_LEADING;
@@ -251,7 +269,8 @@ fn paint(
     let icon = r.format_w(r.icon_family, px(17.0), DWRITE_FONT_WEIGHT_NORMAL, lead)?;
     let head = r.format_w(w!("Segoe UI"), px(15.0), DWRITE_FONT_WEIGHT_SEMI_BOLD, lead)?;
     let label = r.format_w(w!("Segoe UI"), px(13.0), DWRITE_FONT_WEIGHT_NORMAL, lead)?;
-    let name = one_line(r.format_w(w!("Segoe UI"), px(13.0), DWRITE_FONT_WEIGHT_SEMI_BOLD, lead)?)?;
+    let name =
+        one_line(r.format_w(w!("Segoe UI"), px(13.0), DWRITE_FONT_WEIGHT_SEMI_BOLD, lead)?)?;
     let btn = r.format_w(
         w!("Segoe UI"),
         px(13.0),
@@ -336,7 +355,9 @@ fn paint(
     for (i, lk) in labels.into_iter().enumerate() {
         let x = pad + i as f32 * (bw + gap);
         let b = rrect(x, y, x + bw, y + bh, px(7.0));
-        unsafe { r.rt.FillRoundedRectangle(&b, &brush(if i == 0 { &RED } else { &BTN })?) };
+        unsafe {
+            r.rt.FillRoundedRectangle(&b, &brush(if i == 0 { &RED } else { &BTN })?)
+        };
         text(t(lang, lk), &btn, &FG, b.rect)?;
         hits[i] = Rect {
             left: x as i32,
@@ -345,8 +366,8 @@ fn paint(
             bottom: (y + bh) as i32,
         };
     }
-    BUTTONS.with(|b| b.set(hits));
-    unsafe { r.rt.EndDraw(None, None) }
+    unsafe { r.rt.EndDraw(None, None)? };
+    Ok(hits)
 }
 
 #[cfg(test)]

@@ -5,7 +5,7 @@ use crate::config::{Config, Position};
 use crate::geometry::{Rect, hit, pill_row, popup_rect};
 use crate::monitors::Monitor;
 use crate::overlay::{
-    BORDER_RGB, GLYPH_MIC_OFF, MUTE_RED, PillText, Renderer, clickable_common, create_window,
+    BORDER_RGB, GLYPH_PILL_MUTED, MUTE_RED, PillText, Renderer, clickable_common, create_window,
     hinstance, paint_pill, pill_width, post_to_core, rgb,
 };
 use std::cell::RefCell;
@@ -204,7 +204,7 @@ impl OtherPills {
         let pills: Vec<PillText> = labels
             .iter()
             .map(|l| PillText {
-                glyph: GLYPH_MIC_OFF,
+                glyph: GLYPH_PILL_MUTED,
                 label: l,
                 clock: None,
                 accent: MUTE_RED,
