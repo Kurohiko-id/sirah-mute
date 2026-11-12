@@ -25,7 +25,10 @@ mod update;
 
 use windows::Win32::Foundation::HWND;
 use windows::Win32::System::Com::{COINIT_APARTMENTTHREADED, CoInitializeEx};
-use windows::Win32::System::Console::{ATTACH_PARENT_PROCESS, AttachConsole};
+use windows::Win32::Storage::FileSystem::WriteFile;
+use windows::Win32::System::Console::{
+    ATTACH_PARENT_PROCESS, AttachConsole, GetStdHandle, STD_OUTPUT_HANDLE,
+};
 use windows::Win32::UI::HiDpi::{
     DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2, SetProcessDpiAwarenessContext,
 };
@@ -33,6 +36,26 @@ use windows::Win32::UI::HiDpi::{
 fn attach_console() {
     unsafe {
         let _ = AttachConsole(ATTACH_PARENT_PROCESS);
+    }
+}
+
+/// One line to stdout: the inherited handle first (pipe from PowerShell/HASS Agent), parent console
+/// only if there is none. Never creates a console window.
+fn print_stdout(word: &str) {
+    unsafe {
+        let ok = GetStdHandle(STD_OUTPUT_HANDLE)
+            .ok()
+            .filter(|h| !h.is_invalid() && !h.0.is_null())
+            .is_some_and(|h| {
+                let line = format!("{word}
+");
+                let mut n = 0u32;
+                WriteFile(h, Some(line.as_bytes()), Some(&mut n), None).is_ok()
+            });
+        if !ok {
+            attach_console();
+            println!("{word}");
+        }
     }
 }
 
@@ -85,6 +108,9 @@ fn main() {
                 1
             }
         }
+        Some("--status") => app::remote(0),
+        Some("--mute") => app::remote(1),
+        Some("--unmute") => app::remote(2),
         Some("--settings") => match settings::single::acquire() {
             Some(_guard) => settings::ui::run(),
             None => 0,

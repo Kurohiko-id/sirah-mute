@@ -23,5 +23,7 @@ pub const MSG_TOGGLE: PCWSTR = w!("SirahMute.Toggle");
 /// wparam: 1 = pause (unregister hotkey), 0 = resume.
 /// lparam (pause only): settings process ID to watch, 0 = unknown (core falls back to its own child).
 pub const MSG_PAUSE_HOTKEY: PCWSTR = w!("SirahMute.PauseHotkey");
+/// CLI -> core. wparam 0 status, 1 mute, 2 unmute; reply = status code (`app::ST_*`).
+pub const MSG_REMOTE: PCWSTR = w!("SirahMute.Remote");
 
 pub const WINDOW_CLASS: PCWSTR = w!("SirahMuteCore");

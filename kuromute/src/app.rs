@@ -14,6 +14,7 @@ use crate::{audio, autostart, hotkey, log, migrate, monitors, sound};
 use std::cell::RefCell;
 use std::collections::VecDeque;
 use std::process::{Child, Command};
+use std::sync::atomic::{AtomicIsize, Ordering};
 use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant};
 use windows::Win32::Foundation::{
@@ -29,7 +30,7 @@ use windows::Win32::System::Threading::{
 };
 use windows::Win32::UI::Shell::{NIN_BALLOONUSERCLICK, NIN_SELECT, ShellExecuteW};
 use windows::Win32::UI::WindowsAndMessaging::{
-    CreateWindowExW, DefWindowProcW, DispatchMessageW, FindWindowW, GetMessageW, KillTimer, MSG,
+    CreateWindowExW, DefWindowProcW, DispatchMessageW, FindWindowW, GetMessageW, KillTimer, MSG, SMTO_ABORTIFHUNG, SendMessageTimeoutW,
     PBT_APMRESUMEAUTOMATIC, PostMessageW, PostQuitMessage, RegisterClassExW,
     RegisterWindowMessageW, SPI_SETWORKAREA, SW_SHOWNORMAL, SetTimer, TranslateMessage,
     WINDOW_EX_STYLE, WM_CLOSE, WM_CONTEXTMENU, WM_DISPLAYCHANGE, WM_DPICHANGED, WM_ENDSESSION,
@@ -193,6 +194,7 @@ struct Registered {
     show: u32,
     toggle: u32,
     pause: u32,
+    remote: u32,
     taskbar: u32,
 }
 
@@ -204,6 +206,7 @@ fn reg() -> &'static Registered {
             show: RegisterWindowMessageW(MSG_SHOW_SETTINGS),
             toggle: RegisterWindowMessageW(MSG_TOGGLE),
             pause: RegisterWindowMessageW(MSG_PAUSE_HOTKEY),
+            remote: RegisterWindowMessageW(MSG_REMOTE),
             taskbar: RegisterWindowMessageW(w!("TaskbarCreated")),
         }
     })
@@ -218,6 +221,68 @@ pub fn post_to_core(name: PCWSTR) -> bool {
         !h.is_invalid()
             && PostMessageW(Some(h), RegisterWindowMessageW(name), WPARAM(0), LPARAM(0)).is_ok()
     }
+}
+
+pub const ST_LIVE: isize = 0;
+pub const ST_MUTED: isize = 1;
+pub const ST_NO_MIC: isize = 2;
+
+/// Mirror of `State::last_muted` so `--status` answers even while `State` is borrowed.
+static LAST_STATUS: AtomicIsize = AtomicIsize::new(ST_NO_MIC);
+
+pub fn status_code(last_muted: Option<bool>) -> isize {
+    match last_muted {
+        None => ST_NO_MIC,
+        Some(true) => ST_MUTED,
+        Some(false) => ST_LIVE,
+    }
+}
+
+/// Reply code -> (stdout word, exit code). No reply / unknown code = core not running.
+pub fn status_word(code: Option<isize>) -> (&'static str, i32) {
+    match code {
+        Some(ST_LIVE) => ("live", 0),
+        Some(ST_MUTED) => ("muted", 1),
+        Some(ST_NO_MIC) => ("no_mic", 2),
+        _ => ("not_running", 3),
+    }
+}
+
+/// CLI side of `--status` (0) / `--mute` (1) / `--unmute` (2): asks the core, prints the word,
+/// returns the exit code.
+pub fn remote(action: usize) -> i32 {
+    let reply = unsafe {
+        FindWindowW(WINDOW_CLASS, PCWSTR::null()).ok().and_then(|h| {
+            let mut res = 0usize;
+            let r = SendMessageTimeoutW(
+                h,
+                RegisterWindowMessageW(MSG_REMOTE),
+                WPARAM(action),
+                LPARAM(0),
+                SMTO_ABORTIFHUNG,
+                2000,
+                Some(&mut res),
+            );
+            (r.0 != 0).then_some(res as isize)
+        })
+    };
+    let (word, code) = status_word(reply);
+    crate::print_stdout(word);
+    code
+}
+
+/// Answers MSG_REMOTE. Mute/unmute go through `with_state` so a borrowed State defers them.
+fn on_remote(m: u32, wp: WPARAM, lp: LPARAM) -> isize {
+    let cur = LAST_STATUS.load(Ordering::Relaxed);
+    if wp.0 == 0 || cur == ST_NO_MIC {
+        return cur;
+    }
+    let want = if wp.0 == 1 { ST_MUTED } else { ST_LIVE };
+    let mut ok = true;
+    if !with_state(Some((m, wp, lp)), |s| ok = s.remote_mute(wp.0 == 1)) {
+        return ST_NO_MIC;
+    }
+    if ok { want } else { ST_NO_MIC }
 }
 
 /// Result of the latest update check; the worker fills it, then posts `WM_APP_UPDATE`.
@@ -441,6 +506,7 @@ impl State {
     fn rewatch(&mut self) {
         let new = self.audio.watch_mute(self.cfg.mic_id.as_deref());
         let old = std::mem::replace(&mut self.last_muted, new);
+        LAST_STATUS.store(status_code(new), Ordering::Relaxed);
         crate::stats::mute_state(new == Some(true));
         if new.is_none() {
             self.ind.hide_all();
@@ -744,6 +810,17 @@ impl State {
         }
     }
 
+    /// Explicit set (not toggle) for the CLI; indicators follow via the normal WM_APP_MUTE path.
+    fn remote_mute(&mut self, muted: bool) -> bool {
+        match self.audio.set_mute(muted) {
+            Ok(()) => true,
+            Err(e) => {
+                log!("remote: set_mute failed: {e}");
+                false
+            }
+        }
+    }
+
     fn on_mute(&mut self, muted: bool) {
         // Volume changes post this too; only a real state change counts.
         // A pending toggle stays pending until the real change arrives.
@@ -751,6 +828,7 @@ impl State {
             return;
         }
         self.last_muted = Some(muted);
+        LAST_STATUS.store(status_code(self.last_muted), Ordering::Relaxed);
         self.ind.show(self.hwnd, muted, true);
         self.log_latency();
         if muted {
@@ -983,6 +1061,9 @@ impl State {
             WM_APP_OTHERS => self.refresh_others(),
             WM_APP_UPDATE => self.on_update(wp.0 != 0),
             _ if m == r.toggle => self.on_toggle(),
+            _ if m == r.remote => {
+                self.remote_mute(wp.0 == 1);
+            }
             _ if m == r.reload => self.reload(),
             _ if m == r.pause => self.set_hotkey_paused(wp.0 != 0, lp.0 as u32),
             _ if m == r.show => self.open_settings(),
@@ -1041,6 +1122,9 @@ fn is_ours(m: u32) -> bool {
 
 unsafe extern "system" fn wndproc(h: HWND, m: u32, wp: WPARAM, lp: LPARAM) -> LRESULT {
     let mut code = 0;
+    if m != 0 && m == reg().remote {
+        return LRESULT(on_remote(m, wp, lp));
+    }
     if is_ours(m)
         && with_state(Some((m, wp, lp)), |s| {
             s.handle(m, wp, lp);
@@ -1203,6 +1287,22 @@ pub fn run() -> i32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn status_word_maps() {
+        assert_eq!(status_word(Some(0)), ("live", 0));
+        assert_eq!(status_word(Some(1)), ("muted", 1));
+        assert_eq!(status_word(Some(2)), ("no_mic", 2));
+        assert_eq!(status_word(None), ("not_running", 3));
+        assert_eq!(status_word(Some(7)), ("not_running", 3));
+    }
+
+    #[test]
+    fn status_code_from_cache() {
+        assert_eq!(status_code(None), 2);
+        assert_eq!(status_code(Some(true)), 1);
+        assert_eq!(status_code(Some(false)), 0);
+    }
 
     #[test]
     fn drift_asks_once_per_episode() {
