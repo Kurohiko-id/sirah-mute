@@ -126,11 +126,12 @@ Tes manual user: belum (cek ikon mic dicoret di Pill)
 ## Nanti (setelah inti stabil)
 
 - [ ] Statistik anonim Kuro Stats (`src/stats.rs`, belum di-commit 2026-11-12): install/ping, fitur aktif, rentang mute harian, crash. Cek dashboard setelah pasang build terpasang.
-- [ ] Home Assistant via HASS Agent (user mau, 2026-11-12): CLI `--mute` / `--unmute` / `--status` (muted/live/no_mic/not_running) ke core yang jalan; tes PowerShell bisa nangkap output exe GUI (`| Out-String`), kalau nggak pakai exit code; contoh setup HASS Agent di README. MQTT discovery nanti kalau delay sensor kerasa.
+- [x] Home Assistant via HASS Agent (user mau, 2026-11-12): CLI `--mute` / `--unmute` / `--status` (muted/live/no_mic/not_running) ke core yang jalan; tes PowerShell bisa nangkap output exe GUI (`| Out-String`), kalau nggak pakai exit code; contoh setup HASS Agent di README. MQTT discovery nanti kalau delay sensor kerasa.
 - [ ] Integrasi OBS WebSocket (port 4455): peringatan mulai live/rekam padahal mic mute, ringkasan habis stream.
-- [ ] Pill bisa diklik buat unmute (border tetap tembus klik)
-- [ ] Tombol batuk di hotkey yang sama: tekan = mute langsung; lepas < ~0,4 dtk = toggle biasa, ditahan = unmute pas dilepas; tekan pas mute = unmute
-- [ ] Pantau banyak mic: daftar mic + nama pendek, pill "PD400X mute" (ikon, tanpa timer) per mic yang mute, klik = unmute, berjejer ke samping dalam satu grup, posisi grup sendiri. Ganti PD400X Watch. Settings: tab baru "Mic lain" / "Other mics" di antara Mic dan Penanda (daftar mic: device, nama pendek, nyala/mati, hapus, + Tambah mic; posisi pill grup). Tombol batuk: checkbox + batas waktu di bagian Hotkey tab Mic.
+- [x] Pill bisa diklik buat unmute (border tetap tembus klik)
+- [x] Tombol batuk di hotkey yang sama: tekan = mute langsung; lepas < ~0,4 dtk = toggle biasa, ditahan = unmute pas dilepas; tekan pas mute = unmute
+- [x] Pantau banyak mic: daftar mic + nama pendek, pill "PD400X mute" (ikon, tanpa timer) per mic yang mute, klik = unmute, berjejer ke samping dalam satu grup, posisi grup sendiri. Ganti PD400X Watch. Settings: tab baru "Mic lain" / "Other mics" di antara Mic dan Penanda (daftar mic: device, nama pendek, nyala/mati, hapus, + Tambah mic; posisi pill grup). Tombol batuk: checkbox + batas waktu di bagian Hotkey tab Mic.
+- [ ] v2.1.0: kode selesai (commit `chore: v2.1.0`), belum di-tag/rilis. Nunggu tes manual user (spec `specs/2026-11-12-v2.1-design.md` §8), lalu go-ahead. Release notes harus bilang statistik anonim sekarang dikirim.
 - Dibatalkan 2026-11-12: pengingat mute kelamaan (user nggak mau)
 - Dibatalkan 2026-11-12: plugin Stream Deck (user nggak perlu)
 - [ ] Tombol khusus di mouse NOIR S1 (kirim F13 dari firmware atau macro)

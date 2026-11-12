@@ -24,6 +24,10 @@ Gw Kurohiko. Gw udah batuk bertahun-tahun, jadi pas stream gw sering banget penc
 - **Border layar merah** selama mute. Gaya Solid atau Glow, tebal bisa diatur, dan berkedip sebentar waktu baru mute.
 - **Popup dengan timer mute**: `Mic mute 0:42`. Gaya Pill atau Kartu, di sudut mana aja, ukuran bebas, dan bisa tetap tampil selama mute.
 - **Peringatan ngomong pas mute**: baca level mic fisik lu, lalu border berkedip (opsional bunyi beep) kalau lu ngomong pas lagi mute. Jalan juga di setup kayak Wave Link yang di-mute mic virtualnya.
+- **Klik pill buat unmute**: popup merah bisa diklik (gaya Pill). Bisa diklik selama kelihatan; nyalain "tetap tampil selama mute" biar tetap bisa diklik. Border tetap tembus klik ke game lu.
+- **Tahan buat batuk**: default mati. Tahan hotkey, mic mute cuma selama ditahan; tekan sebentar = toggle biasa. Batas waktu tahan bisa diatur.
+- **Mic lain**: pilih mic tambahan buat dipantau. Pill `{nama} mute` muncul kalau salah satunya mute, klik buat unmute.
+- **Home Assistant**: `--mute`, `--unmute`, dan `--status` buat HASS Agent (lihat [Home Assistant](#home-assistant-hass-agent)).
 - **Jaga device default**: pilih input dan output, lalu Sirah Mute bisa maksa pas startup, kasih notifikasi, atau balikin otomatis kalau Windows diam-diam menggantinya.
 - **Ikon tray nunjukin status**: kapsul abu-abu = mic hidup, kapsul merah = mute, badge kuning = mic nggak ketemu.
 - Pilih monitor mana yang nampilin border dan popup, bunyi beep mute/unmute (opsional), jalan saat Windows start, cek update, bahasa Inggris dan Indonesia.
@@ -82,7 +86,7 @@ Semua data ini **sepenuhnya anonim**. Aku tidak tahu siapa yang menginstal Sirah
 - ID acak yang dibuat saat Sirah Mute pertama kali dibuka. ID ini tidak terhubung ke akun, nama, atau perangkat kalian.
 - Versi Sirah Mute, versi Windows, dan bahasa sistem.
 - Negara, diperkirakan dari koneksi. Alamat IP tidak disimpan.
-- Nama pengaturan yang sedang aktif, misalnya border Glow/Solid, popup Pill/Card beserta posisinya dan apakah tetap tampil selama mute, peringatan bicara saat mute, beep, penjaga perangkat default, jalan saat Windows start, dan apakah hotkey diganti. Tiap pengaturan dihitung paling banyak sekali sehari, jadi tidak ada catatan per klik.
+- Nama pengaturan yang sedang aktif, misalnya border Glow/Solid, popup Pill/Card beserta posisinya dan apakah tetap tampil selama mute, peringatan bicara saat mute, tahan buat batuk (`cough_hold`), mic lain (`other_mics`), beep, penjaga perangkat default, jalan saat Windows start, dan apakah hotkey diganti. Tiap pengaturan dihitung paling banyak sekali sehari, jadi tidak ada catatan per klik.
 - Seberapa sering kalian mute tiap hari, hanya dalam rentang kasar: berapa kali (1–5, 6–20, 21–50, lebih dari 50) dan total lamanya (di bawah 5 menit, 5–30 menit, 30 menit–2 jam, lebih lama). Waktu dan lama tiap mute tidak dikirim.
 - Pesan crash kalau Sirah Mute mengalami masalah. Nama folder pengguna di dalamnya disamarkan.
 

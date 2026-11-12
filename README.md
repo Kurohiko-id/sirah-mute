@@ -24,6 +24,10 @@ I'm Kurohiko. I've had a cough for years, so on stream I hit mute a lot. The pro
 - **Red screen border** while muted. Solid or Glow, adjustable thickness, with a short pulse when you mute.
 - **Popup with a mute timer**: `Mic mute 0:42`. Pill or Card style, any corner, any size, and it can stay up the whole time you're muted.
 - **Talk-while-muted warning**: reads your physical mic's level and pulses the border (optionally beeps) when you speak while muted. Works with setups like Wave Link where you mute a virtual mic.
+- **Click the pill to unmute**: the red popup takes clicks (Pill style). It is clickable while visible; turn on "keep showing while muted" to keep it clickable. The border still lets clicks through to your game.
+- **Hold to cough**: off by default. Hold the hotkey and you are muted only while it is held; a short press is the normal toggle. The hold threshold is adjustable.
+- **Other mics**: pick extra mics to watch. A `{name} mute` pill shows while one of them is muted, and a click unmutes it.
+- **Home Assistant**: `--mute`, `--unmute` and `--status` for HASS Agent (see [Home Assistant](#home-assistant-hass-agent)).
 - **Keeps your default devices**: pick your input and output, and Sirah Mute can force them at startup, notify you, or switch back automatically when Windows changes them behind your back.
 - **Tray icon shows the state**: grey capsule = live, red capsule = muted, yellow badge = mic missing.
 - Choose which monitors show the border and popup, optional mute/unmute beep, start with Windows, update check, English and Bahasa Indonesia.
@@ -82,7 +86,7 @@ All of this is **fully anonymous**. I don't know who installed Sirah Mute, and I
 - A random ID created the first time Sirah Mute opens. It isn't linked to your accounts, your name, or your device.
 - Sirah Mute version, Windows version, and system language.
 - Country, estimated from the connection. IP addresses are not stored.
-- Names of the settings that are switched on, such as border Glow/Solid, popup Pill/Card, its corner and whether it stays up while muted, talk-while-muted warning, beep, default-device guard, start with Windows, and whether you changed the hotkey. Each one is counted at most once a day, so there is no per-click record.
+- Names of the settings that are switched on, such as border Glow/Solid, popup Pill/Card, its corner and whether it stays up while muted, talk-while-muted warning, hold to cough (`cough_hold`), other mics (`other_mics`), beep, default-device guard, start with Windows, and whether you changed the hotkey. Each one is counted at most once a day, so there is no per-click record.
 - How much you muted each day, as rough ranges only: how many times (1–5, 6–20, 21–50, more than 50) and for how long in total (under 5 minutes, 5–30 minutes, 30 minutes–2 hours, longer). Not the exact times or lengths of each mute.
 - Crash messages when something goes wrong, with your user folder name masked.
 
