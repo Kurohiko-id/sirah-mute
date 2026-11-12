@@ -36,8 +36,8 @@ pub fn popup_rect(work: Rect, pos: Position, style: PopupStyle, scale: f32, dpi:
 }
 
 /// Screen rects of a row of pills (widths in order) at `pos` in `work`. When the
-/// main popup sits at the same position (`main_pos`), the row moves one pill
-/// height + gap away from the screen edge so the two never overlap.
+/// main popup sits at the same position (`main` = its position and height), the
+/// row moves that height + gap away from the screen edge so the two never overlap.
 #[allow(clippy::too_many_arguments)]
 pub fn pill_row(
     widths: &[i32],
@@ -46,17 +46,16 @@ pub fn pill_row(
     work: Rect,
     margin: i32,
     pos: Position,
-    main_pos: Option<Position>,
+    main: Option<(Position, i32)>,
 ) -> Vec<Rect> {
     let total = widths.iter().sum::<i32>() + gap * (widths.len() as i32 - 1).max(0);
     let top_side = matches!(
         pos,
         Position::TopLeft | Position::TopCenter | Position::TopRight
     );
-    let dodge = if main_pos == Some(pos) {
-        pill_h + gap
-    } else {
-        0
+    let dodge = match main {
+        Some((p, h)) if p == pos => h + gap,
+        _ => 0,
     };
     let top = if top_side {
         work.top + margin + dodge
@@ -191,13 +190,16 @@ mod tests {
     fn pill_row_dodges_main_popup() {
         let work = r(0, 0, 1000, 800);
         let row = |pos, main| pill_row(&[100, 120], 8, 40, work, 24, pos, main);
-        let bl = row(Position::BottomLeft, Some(Position::BottomLeft));
+        let bl = row(Position::BottomLeft, Some((Position::BottomLeft, 40)));
         assert_eq!(bl[0].bottom, 776 - 48);
-        let tl = row(Position::TopLeft, Some(Position::TopLeft));
+        let tl = row(Position::TopLeft, Some((Position::TopLeft, 40)));
         assert_eq!(tl[0].top, 24 + 48);
+        // a taller main popup (Card) pushes the row by its real height
+        let card = row(Position::BottomLeft, Some((Position::BottomLeft, 100)));
+        assert_eq!(card[0].bottom, 776 - 108);
         // a popup elsewhere does not move the row
         assert_eq!(
-            row(Position::TopLeft, Some(Position::BottomLeft))[0].top,
+            row(Position::TopLeft, Some((Position::BottomLeft, 40)))[0].top,
             24
         );
     }

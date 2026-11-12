@@ -2,7 +2,7 @@
 //! one clickable pill per muted mic. Never takes focus; click-through outside pills.
 
 use crate::config::{Config, Position};
-use crate::geometry::{Rect, hit, pill_row};
+use crate::geometry::{Rect, hit, pill_row, popup_rect};
 use crate::monitors::Monitor;
 use crate::overlay::{
     BORDER_RGB, GLYPH_MIC_OFF, MUTE_RED, PillText, Renderer, clickable_common, create_window,
@@ -101,6 +101,8 @@ struct Win {
     /// Physical px per DIP on this monitor.
     k: f32,
     fmts: [IDWriteTextFormat; 3],
+    /// Main popup's position and real height on this monitor, if it is enabled.
+    main: Option<(Position, i32)>,
 }
 
 pub struct OtherPills {
@@ -108,7 +110,6 @@ pub struct OtherPills {
     renderer: Option<Renderer>,
     scale: f32,
     pos: Position,
-    main_pos: Option<Position>,
 }
 
 impl OtherPills {
@@ -118,7 +119,6 @@ impl OtherPills {
             renderer: None,
             scale: 1.0,
             pos: Position::BottomLeft,
-            main_pos: None,
         }
     }
 
@@ -131,7 +131,6 @@ impl OtherPills {
         register_class();
         self.scale = cfg.popup_scale;
         self.pos = cfg.other_mics_position;
-        self.main_pos = cfg.popup_enabled.then_some(cfg.popup_position);
         let r = match Renderer::new() {
             Ok(r) => r,
             Err(e) => {
@@ -157,6 +156,16 @@ impl OtherPills {
                     work: m.work,
                     k: m.dpi as f32 / 96.0,
                     fmts,
+                    main: cfg.popup_enabled.then(|| {
+                        let p = popup_rect(
+                            m.work,
+                            cfg.popup_position,
+                            cfg.popup_style,
+                            cfg.popup_scale,
+                            m.dpi,
+                        );
+                        (cfg.popup_position, p.bottom - p.top)
+                    }),
                 }),
                 Err(e) => {
                     crate::log::write(format!("others: window for {} failed: {e}", m.gdi_name))
@@ -178,6 +187,9 @@ impl OtherPills {
             }
             if let Err(e) = self.draw(r, win, &labels) {
                 crate::log::write(format!("others: draw failed: {e}"));
+                // Never leave an old layout clickable: its indices no longer match.
+                set_rects(win.hwnd, Vec::new());
+                swp(win.hwnd, SWP_HIDEWINDOW);
             }
         }
     }
@@ -210,7 +222,7 @@ impl OtherPills {
             win.work,
             margin,
             self.pos,
-            self.main_pos,
+            win.main,
         );
         let (first, last) = (rects[0], rects[rects.len() - 1]);
         let bb = Rect {

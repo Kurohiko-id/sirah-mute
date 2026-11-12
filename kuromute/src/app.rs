@@ -574,11 +574,7 @@ impl State {
         };
         // "Now" = the first role that isn't the pick (drift can be in one role only).
         let now = |roles: &[Option<String>; 3], pick: &Option<String>| {
-            roles
-                .iter()
-                .flatten()
-                .find(|r| Some(*r) != pick.as_ref())
-                .cloned()
+            roles.iter().flatten().find(|r| Some(*r) != pick.as_ref()).cloned()
         };
         let mut rows = Vec::new();
         if input {
@@ -1211,15 +1207,9 @@ mod tests {
     #[test]
     fn drift_asks_once_per_episode() {
         assert_eq!(drift_after_check(Drift::Clear, true), (Drift::Asking, true));
-        assert_eq!(
-            drift_after_check(Drift::Asking, true),
-            (Drift::Asking, false)
-        );
+        assert_eq!(drift_after_check(Drift::Asking, true), (Drift::Asking, false));
         assert_eq!(drift_after_check(Drift::Kept, true), (Drift::Kept, false));
-        assert_eq!(
-            drift_after_check(Drift::Snoozed, true),
-            (Drift::Snoozed, false)
-        );
+        assert_eq!(drift_after_check(Drift::Snoozed, true), (Drift::Snoozed, false));
         // Defaults match again (or guard off / AutoRevert): episode over, next drift asks again.
         for d in [Drift::Asking, Drift::Kept, Drift::Snoozed] {
             assert_eq!(drift_after_check(d, false), (Drift::Clear, false));

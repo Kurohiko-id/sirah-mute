@@ -38,11 +38,12 @@ use windows::Win32::UI::WindowsAndMessaging::{
     BeginDeferWindowPos, CreateWindowExW, DefWindowProcW, DeferWindowPos, DestroyWindow,
     EndDeferWindowPos, FindWindowW, GWLP_USERDATA, GetWindowLongPtrW, HTCLIENT, HTTRANSPARENT,
     HWND_TOPMOST, IDC_HAND, KillTimer, LWA_ALPHA, LoadCursorW, MA_NOACTIVATE, PostMessageW,
-    RegisterClassExW, SET_WINDOW_POS_FLAGS, SWP_HIDEWINDOW, SWP_NOACTIVATE, SWP_NOMOVE,
-    SWP_NOREDRAW, SWP_NOSIZE, SWP_SHOWWINDOW, SetCursor, SetLayeredWindowAttributes, SetTimer,
-    SetWindowLongPtrW, SetWindowPos, ULW_ALPHA, UpdateLayeredWindow, WM_CLOSE, WM_LBUTTONUP,
-    WM_MOUSEACTIVATE, WM_NCHITTEST, WM_SETCURSOR, WNDCLASSEXW, WS_EX_LAYERED, WS_EX_NOACTIVATE,
-    WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_EX_TRANSPARENT, WS_POPUP,
+    RegisterClassExW, SET_WINDOW_POS_FLAGS, SWP_HIDEWINDOW, SetCursor, SetWindowLongPtrW,
+    WM_LBUTTONUP, WM_SETCURSOR,
+    SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOREDRAW, SWP_NOSIZE, SWP_SHOWWINDOW,
+    SetLayeredWindowAttributes, SetTimer, SetWindowPos, ULW_ALPHA, UpdateLayeredWindow, WM_CLOSE,
+    WM_MOUSEACTIVATE, WM_NCHITTEST, WNDCLASSEXW, WS_EX_LAYERED, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW,
+    WS_EX_TOPMOST, WS_EX_TRANSPARENT, WS_POPUP,
 };
 use windows::core::{BOOL, PCWSTR, Result, w};
 
@@ -170,11 +171,7 @@ fn register_classes() {
 }
 
 pub(crate) fn create_window(class: PCWSTR, r: Rect, transparent: bool) -> Result<HWND> {
-    let click = if transparent {
-        WS_EX_TRANSPARENT
-    } else {
-        Default::default()
-    };
+    let click = if transparent { WS_EX_TRANSPARENT } else { Default::default() };
     unsafe {
         CreateWindowExW(
             WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | click | WS_EX_TOPMOST | WS_EX_LAYERED,
