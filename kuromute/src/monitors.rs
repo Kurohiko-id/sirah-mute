@@ -4,12 +4,11 @@ use windows::Win32::Graphics::Gdi::{
     DISPLAY_DEVICEW, EnumDisplayDevicesW, EnumDisplayMonitors, GetMonitorInfoW, HDC, HMONITOR,
     MONITORINFO, MONITORINFOEXW,
 };
-use windows::core::BOOL;
-
-const MONITORINFOF_PRIMARY: u32 = 1;
-const EDD_GET_DEVICE_INTERFACE_NAME: u32 = 1;
 use windows::Win32::UI::HiDpi::{GetDpiForMonitor, MDT_EFFECTIVE_DPI};
-use windows::core::PCWSTR;
+use windows::Win32::UI::WindowsAndMessaging::{
+    EDD_GET_DEVICE_INTERFACE_NAME, MONITORINFOF_PRIMARY,
+};
+use windows::core::{BOOL, PCWSTR};
 
 #[derive(Clone, Debug)]
 pub struct Monitor {
@@ -100,9 +99,8 @@ pub fn select<'a>(all: &'a [Monitor], all_monitors: bool, ids: &[String]) -> Vec
     let hit: Vec<&Monitor> = all
         .iter()
         .filter(|m| {
-            ids.iter().any(|id| {
-                id_matches(id, &m.stable_id, &m.gdi_name)
-            })
+            ids.iter()
+                .any(|id| id_matches(id, &m.stable_id, &m.gdi_name))
         })
         .collect();
     if !hit.is_empty() {
