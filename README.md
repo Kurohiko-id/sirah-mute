@@ -39,6 +39,36 @@ Download **SirahMute-Setup.exe** (per-user installer, no admin) or the portable 
 
 Sirah Mute is the new version of Kuro Mute. It picks up your old settings automatically on first start and replaces the old app's autostart entry. You can uninstall Kuro Mute afterwards.
 
+## Home Assistant (HASS Agent)
+
+Sirah Mute can be controlled from the command line, so HASS Agent can mute, unmute and report the mic state. The app must be running.
+
+Commands (HASS Agent, Custom or PowerShell command):
+
+```
+"%LOCALAPPDATA%\Programs\SirahMute\sirahmute.exe" --mute
+"%LOCALAPPDATA%\Programs\SirahMute\sirahmute.exe" --unmute
+```
+
+Sensor (PowerShell sensor):
+
+```
+& "$env:LOCALAPPDATA\Programs\SirahMute\sirahmute.exe" --status | Out-String
+```
+
+`--status` prints one word and also sets the exit code:
+
+| State | Output | Exit code |
+|---|---|---|
+| Mic live | `live` | 0 |
+| Muted | `muted` | 1 |
+| No mic selected or unplugged | `no_mic` | 2 |
+| Sirah Mute not running | `not_running` | 3 |
+
+`--mute` and `--unmute` print the resulting state the same way. They set the state, they don't toggle.
+
+Notes: for the portable version, use the path of the folder you unzipped it to. The state in Home Assistant lags by up to the sensor interval you set in HASS Agent.
+
 ## Privacy
 
 Hi, I'm Kurohiko, the developer of Sirah Mute. I care a lot about your privacy.

@@ -39,6 +39,36 @@ Unduh **SirahMute-Setup.exe** (installer per-user, tanpa admin) atau zip portabl
 
 Sirah Mute adalah versi baru Kuro Mute. Settingan lama otomatis kebawa waktu pertama jalan, dan entri autostart app lama diganti. Setelah itu Kuro Mute boleh di-uninstall.
 
+## Home Assistant (HASS Agent)
+
+Sirah Mute bisa dikontrol lewat command line, jadi HASS Agent bisa mute, unmute, dan baca status mic. Aplikasinya harus lagi jalan.
+
+Command (HASS Agent, Custom atau PowerShell command):
+
+```
+"%LOCALAPPDATA%\Programs\SirahMute\sirahmute.exe" --mute
+"%LOCALAPPDATA%\Programs\SirahMute\sirahmute.exe" --unmute
+```
+
+Sensor (PowerShell sensor):
+
+```
+& "$env:LOCALAPPDATA\Programs\SirahMute\sirahmute.exe" --status | Out-String
+```
+
+`--status` nampilin satu kata dan juga ngisi exit code:
+
+| Keadaan | Output | Exit code |
+|---|---|---|
+| Mic hidup | `live` | 0 |
+| Mute | `muted` | 1 |
+| Mic belum dipilih atau dicabut | `no_mic` | 2 |
+| Sirah Mute nggak jalan | `not_running` | 3 |
+
+`--mute` dan `--unmute` nampilin status hasilnya dengan cara yang sama. Keduanya menetapkan status, bukan toggle.
+
+Catatan: buat versi portable, pakai path folder tempat zip-nya diekstrak. Status di Home Assistant telat sesuai interval sensor yang kamu atur di HASS Agent.
+
 ## Privasi
 
 Halo, aku Kurohiko, developer Sirah Mute. Aku sangat menghargai privasi kalian.
