@@ -48,6 +48,18 @@ pub fn pill_row(
     pos: Position,
     main: Option<(Position, i32)>,
 ) -> Vec<Rect> {
+    // Only the prefix that fits between the margins; the rest are dropped, so
+    // rect i always belongs to pill i.
+    let avail = work.right - work.left - 2 * margin;
+    let mut used = -gap;
+    let n = widths
+        .iter()
+        .take_while(|&&w| {
+            used += w + gap;
+            used <= avail
+        })
+        .count();
+    let widths = &widths[..n];
     let total = widths.iter().sum::<i32>() + gap * (widths.len() as i32 - 1).max(0);
     let top_side = matches!(
         pos,
@@ -202,6 +214,23 @@ mod tests {
             row(Position::TopLeft, Some((Position::BottomLeft, 40)))[0].top,
             24
         );
+    }
+
+    #[test]
+    fn pill_row_drops_pills_past_the_edge() {
+        // 1000 wide, margin 24 -> 952 usable: 400 + 8 + 400 fits, a third does not
+        let work = r(0, 0, 1000, 800);
+        let row = |pos| pill_row(&[400, 400, 400], 8, 40, work, 24, pos, None);
+        for pos in [Position::BottomLeft, Position::TopCenter, Position::BottomRight] {
+            let rects = row(pos);
+            assert_eq!(rects.len(), 2, "{pos:?}");
+            assert!(rects[0].left >= 24 && rects[1].right <= 976, "{pos:?}");
+        }
+        assert_eq!(row(Position::BottomRight)[1].right, 976);
+        // shown pills keep their indices: a prefix, never a neighbour
+        assert_eq!(row(Position::BottomLeft)[0].right - row(Position::BottomLeft)[0].left, 400);
+        // nothing fits -> empty
+        assert!(pill_row(&[2000], 8, 40, work, 24, Position::BottomLeft, None).is_empty());
     }
 
     #[test]

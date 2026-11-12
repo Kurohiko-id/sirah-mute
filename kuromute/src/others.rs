@@ -224,7 +224,12 @@ impl OtherPills {
             self.pos,
             win.main,
         );
-        let (first, last) = (rects[0], rects[rects.len() - 1]);
+        // Pills past the work-area edge are dropped (rects is a prefix of pills).
+        let (Some(&first), Some(&last)) = (rects.first(), rects.last()) else {
+            set_rects(win.hwnd, Vec::new());
+            swp(win.hwnd, SWP_HIDEWINDOW);
+            return Ok(());
+        };
         let bb = Rect {
             left: first.left,
             top: first.top,

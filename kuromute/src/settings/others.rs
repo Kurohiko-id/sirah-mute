@@ -57,9 +57,12 @@ pub fn setup(w: &MainWindow, state: &Rc<RefCell<State>>, sink: HWND) -> Rc<dyn F
             for m in &s.cfg.other_mics {
                 if !ids.contains(&m.id) {
                     // unplugged: stays listed, like the main-mic dropdown
+                    let name = match m.name.trim() {
+                        "" => "Mic",
+                        n => n,
+                    };
                     names.push(format!(
-                        "{} {}",
-                        m.name,
+                        "{name} {}",
                         i18n::t(lang, Key::MicNotConnected)
                     ));
                     ids.push(m.id.clone());

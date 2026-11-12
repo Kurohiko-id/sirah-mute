@@ -274,6 +274,15 @@ pub fn remote(action: usize) -> i32 {
     code
 }
 
+/// MSG_REMOTE wparam -> Some(mute) for 1/2; 0 (status) and anything unknown -> None.
+fn remote_action(wp: usize) -> Option<bool> {
+    match wp {
+        1 => Some(true),
+        2 => Some(false),
+        _ => None,
+    }
+}
+
 /// Answers MSG_REMOTE. Mute/unmute go through `with_state` so a borrowed State defers them.
 fn on_remote(m: u32, wp: WPARAM, lp: LPARAM) -> isize {
     REPLY_BASE + remote_code(m, wp, lp)
@@ -281,12 +290,15 @@ fn on_remote(m: u32, wp: WPARAM, lp: LPARAM) -> isize {
 
 fn remote_code(m: u32, wp: WPARAM, lp: LPARAM) -> isize {
     let cur = LAST_STATUS.load(Ordering::Relaxed);
-    if wp.0 == 0 || cur == ST_NO_MIC {
+    let Some(mute) = remote_action(wp.0) else {
+        return cur;
+    };
+    if cur == ST_NO_MIC {
         return cur;
     }
-    let want = if wp.0 == 1 { ST_MUTED } else { ST_LIVE };
+    let want = if mute { ST_MUTED } else { ST_LIVE };
     let mut ok = true;
-    if !with_state(Some((m, wp, lp)), |s| ok = s.remote_mute(wp.0 == 1)) {
+    if !with_state(Some((m, wp, lp)), |s| ok = s.remote_mute(mute)) {
         return ST_NO_MIC;
     }
     if ok { want } else { ST_NO_MIC }
@@ -1071,7 +1083,9 @@ impl State {
             WM_APP_UPDATE => self.on_update(wp.0 != 0),
             _ if m == r.toggle => self.on_toggle(),
             _ if m == r.remote => {
-                self.remote_mute(wp.0 == 1);
+                if let Some(mute) = remote_action(wp.0) {
+                    self.remote_mute(mute);
+                }
             }
             _ if m == r.reload => self.reload(),
             _ if m == r.pause => self.set_hotkey_paused(wp.0 != 0, lp.0 as u32),
@@ -1307,6 +1321,15 @@ mod tests {
         // an older core leaves the message to DefWindowProc, which returns 0
         assert_eq!(status_word(Some(0)), ("not_running", 3));
         assert_eq!(status_word(Some(1)), ("not_running", 3));
+    }
+
+    #[test]
+    fn remote_action_maps() {
+        assert_eq!(remote_action(0), None);
+        assert_eq!(remote_action(1), Some(true));
+        assert_eq!(remote_action(2), Some(false));
+        assert_eq!(remote_action(3), None);
+        assert_eq!(remote_action(usize::MAX), None);
     }
 
     #[test]

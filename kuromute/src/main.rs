@@ -23,6 +23,7 @@ mod talk;
 mod tray;
 mod update;
 
+use std::io::Write;
 use windows::Win32::Foundation::HWND;
 use windows::Win32::System::Com::{COINIT_APARTMENTTHREADED, CoInitializeEx};
 use windows::Win32::Storage::FileSystem::WriteFile;
@@ -54,7 +55,8 @@ fn print_stdout(word: &str) {
             });
         if !ok {
             attach_console();
-            println!("{word}");
+            // println! panics on a closed stdout; a lost line is fine.
+            let _ = writeln!(std::io::stdout(), "{word}");
         }
     }
 }
