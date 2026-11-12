@@ -24,7 +24,7 @@ const STYLES: [BorderStyle; 2] = [BorderStyle::Solid, BorderStyle::Glow];
 const POPUP_STYLES: [PopupStyle; 2] = [PopupStyle::Card, PopupStyle::Pill];
 
 /// Saves once, 300 ms after the last `poke`.
-struct Delayed {
+pub struct Delayed {
     timer: Timer,
     deb: RefCell<Debouncer>,
     t0: Instant,
@@ -32,7 +32,7 @@ struct Delayed {
 }
 
 impl Delayed {
-    fn new() -> Rc<Self> {
+    pub fn new() -> Rc<Self> {
         Rc::new(Delayed {
             timer: Timer::default(),
             deb: RefCell::new(Debouncer::new(300)),
@@ -46,14 +46,14 @@ impl Delayed {
     }
 
     /// Runs a save that is still waiting out its quiet period (window closing).
-    fn flush(&self) {
+    pub fn flush(&self) {
         self.timer.stop();
         if let Some(save) = self.pending.borrow_mut().take() {
             save();
         }
     }
 
-    fn poke(self: &Rc<Self>, save: impl Fn() + 'static) {
+    pub fn poke(self: &Rc<Self>, save: impl Fn() + 'static) {
         self.deb.borrow_mut().bump(self.now());
         *self.pending.borrow_mut() = Some(Rc::new(save));
         let me = self.clone();

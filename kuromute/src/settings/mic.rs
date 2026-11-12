@@ -1,5 +1,6 @@
 //! Mic tab glue: mic dropdown, hotkey record/pick, test mute.
 use super::model::{hotkey_choice, hotkey_warning};
+use super::penanda::Delayed;
 use super::record::{self, RecordEvent, Recorder};
 use super::ui::{MainWindow, State, commit, send_to_core};
 use crate::audio::{Audio, Flow};
@@ -21,11 +22,15 @@ pub struct Mic {
     pub sink: HWND,
     /// Re-reads the mic list (tab opened).
     pub refresh: Rc<dyn Fn()>,
+    /// Debounced cough-slider save.
+    cough: Rc<Delayed>,
 }
 
 impl Mic {
-    /// Called after the window closes: never leave the core's hotkey paused.
+    /// Called after the window closes: save a pending slider change, and never leave the
+    /// core's hotkey paused.
     pub fn finish(self) {
+        self.cough.flush();
         if self.recorder.borrow_mut().take().is_some() {
             resume();
         }
@@ -166,8 +171,14 @@ fn pick(ids: &RefCell<Vec<String>>, i: i32, slot: &mut Option<String>) -> bool {
     slot.replace(id.clone()).as_ref() != Some(&id)
 }
 
-/// Fills the mic and talk-source dropdowns now; the returned closure re-reads the devices (tab opened).
-fn setup_mics(w: &MainWindow, state: &Rc<RefCell<State>>, sink: HWND) -> Rc<dyn Fn()> {
+/// Fills the mic and talk-source dropdowns now; the returned closure re-reads the devices
+/// (tab opened) and the language-dependent cough label (language changed).
+fn setup_mics(
+    w: &MainWindow,
+    state: &Rc<RefCell<State>>,
+    sink: HWND,
+    cough: &Rc<Delayed>,
+) -> Rc<dyn Fn()> {
     let ids: Rc<RefCell<Vec<String>>> = Rc::default();
     let talk_ids: Rc<RefCell<Vec<String>>> = Rc::default();
     let (ww, st, ids2, talk2) = (w.as_weak(), state.clone(), ids.clone(), talk_ids.clone());
@@ -175,6 +186,9 @@ fn setup_mics(w: &MainWindow, state: &Rc<RefCell<State>>, sink: HWND) -> Rc<dyn 
         let Some(w) = ww.upgrade() else { return };
         let (cur, talk_cur, lang) = {
             let s = st.borrow();
+            w.set_cough_secs(
+                cough_secs_text(s.cfg.cough_hold_ms, i18n::resolve(s.cfg.language)).into(),
+            );
             (
                 s.cfg.mic_id.clone(),
                 s.cfg.talk_warn_mic_id.clone(),
@@ -196,7 +210,15 @@ fn setup_mics(w: &MainWindow, state: &Rc<RefCell<State>>, sink: HWND) -> Rc<dyn 
     let (ww, st) = (w.as_weak(), state.clone());
     w.on_mic_selected(move |i| {
         let Some(w) = ww.upgrade() else { return };
-        if pick(&ids, i, &mut st.borrow_mut().cfg.mic_id) {
+        let changed = {
+            let mut s = st.borrow_mut();
+            let changed = pick(&ids, i, &mut s.cfg.mic_id);
+            // the main mic can't also be an "other mic" row
+            let main = s.cfg.mic_id.clone();
+            s.cfg.other_mics.retain(|m| Some(&m.id) != main.as_ref());
+            changed
+        };
+        if changed {
             commit(&st, &w);
         }
     });
@@ -223,23 +245,25 @@ fn setup_mics(w: &MainWindow, state: &Rc<RefCell<State>>, sink: HWND) -> Rc<dyn 
         st.borrow_mut().cfg.cough_hold = w.get_cough_enabled();
         commit(&st, &w);
     });
-    let (ww, st) = (w.as_weak(), state.clone());
+    let (ww, st, delayed) = (w.as_weak(), state.clone(), cough.clone());
     w.on_cough_ms_changed(move |v| {
         let Some(w) = ww.upgrade() else { return };
         let ms = snap_cough_ms(v);
         w.set_cough_ms(ms as f32);
         w.set_cough_secs(cough_secs_text(ms, i18n::resolve(st.borrow().cfg.language)).into());
         if ms != std::mem::replace(&mut st.borrow_mut().cfg.cough_hold_ms, ms) {
-            commit(&st, &w);
+            let (ww, st) = (ww.clone(), st.clone());
+            delayed.poke(move || {
+                if let Some(w) = ww.upgrade() {
+                    commit(&st, &w);
+                }
+            });
         }
     });
     {
         let s = state.borrow();
         w.set_cough_enabled(s.cfg.cough_hold);
         w.set_cough_ms(s.cfg.cough_hold_ms as f32);
-        w.set_cough_secs(
-            cough_secs_text(s.cfg.cough_hold_ms, i18n::resolve(s.cfg.language)).into(),
-        );
     }
     refresh
 }
@@ -252,7 +276,8 @@ pub fn setup(w: &MainWindow, state: &Rc<RefCell<State>>) -> Mic {
             HWND::default()
         }
     };
-    let refresh = setup_mics(w, state, sink);
+    let cough = Delayed::new();
+    let refresh = setup_mics(w, state, sink, &cough);
     show_hotkey(w, &state.borrow().cfg.hotkey);
 
     let recorder: Rc<RefCell<Option<Recorder>>> = Rc::new(RefCell::new(None));
@@ -329,6 +354,7 @@ pub fn setup(w: &MainWindow, state: &Rc<RefCell<State>>) -> Mic {
         recorder,
         sink,
         refresh,
+        cough,
     }
 }
 
