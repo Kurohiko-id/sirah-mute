@@ -67,6 +67,23 @@ where
     Ok(T::deserialize(d).unwrap_or_default())
 }
 
+/// Extra mic shown as a clickable pill. `name` is display-only (never sent to stats).
+#[derive(Serialize, Deserialize, Clone, PartialEq, Debug, Default)]
+#[serde(default)]
+pub struct OtherMic {
+    pub id: String,
+    pub name: String,
+    pub enabled: bool,
+}
+pub const MAX_OTHER_MICS: usize = 6;
+pub const OTHER_NAME_MAX: usize = 16;
+
+/// Like `or_default`, but falls back to BottomLeft (`Position::default` is BottomCenter).
+/// A missing field is covered by `Config::default()` via `#[serde(default)]`.
+fn other_pos_or_default<'de, D: Deserializer<'de>>(d: D) -> Result<Position, D::Error> {
+    Ok(Position::deserialize(d).unwrap_or(Position::BottomLeft))
+}
+
 #[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
 #[serde(default)]
 pub struct Config {
@@ -98,6 +115,11 @@ pub struct Config {
     pub language: Lang,
     pub talk_warn_enabled: bool,
     pub talk_warn_mic_id: Option<String>,
+    pub cough_hold: bool,
+    pub cough_hold_ms: u32,
+    pub other_mics: Vec<OtherMic>,
+    #[serde(deserialize_with = "other_pos_or_default")]
+    pub other_mics_position: Position,
 }
 
 impl Default for Config {
@@ -126,6 +148,10 @@ impl Default for Config {
             language: Lang::default(),
             talk_warn_enabled: false,
             talk_warn_mic_id: None,
+            cough_hold: false,
+            cough_hold_ms: 400,
+            other_mics: Vec::new(),
+            other_mics_position: Position::BottomLeft,
         }
     }
 }
@@ -138,6 +164,13 @@ impl Config {
             self.popup_scale.clamp(0.5, 2.0)
         };
         self.border_thickness = self.border_thickness.clamp(1, 30);
+        self.cough_hold_ms = self.cough_hold_ms.clamp(200, 2000);
+        let mut seen = std::collections::HashSet::new();
+        self.other_mics.retain(|m| seen.insert(m.id.clone()));
+        self.other_mics.truncate(MAX_OTHER_MICS);
+        for m in &mut self.other_mics {
+            m.name = m.name.chars().take(OTHER_NAME_MAX).collect();
+        }
         self
     }
 }
@@ -387,5 +420,49 @@ mod tests {
             load(&std::env::temp_dir().join("sirahmute-nonexistent/config.json")),
             LoadOutcome::Missing
         );
+    }
+
+    #[test]
+    fn old_config_has_v21_defaults() {
+        let c: Config = serde_json::from_str("{}").unwrap();
+        assert!(!c.cough_hold);
+        assert_eq!(c.cough_hold_ms, 400);
+        assert!(c.other_mics.is_empty());
+        assert_eq!(c.other_mics_position, Position::BottomLeft);
+        let c: Config = serde_json::from_str(r#"{"other_mics_position":"Nope"}"#).unwrap();
+        assert_eq!(c.other_mics_position, Position::BottomLeft);
+    }
+    #[test]
+    fn sanitize_cough_ms() {
+        for (i, o) in [(50, 200), (9000, 2000), (400, 400)] {
+            let c = Config {
+                cough_hold_ms: i,
+                ..Default::default()
+            }
+            .sanitized();
+            assert_eq!(c.cough_hold_ms, o);
+        }
+    }
+    #[test]
+    fn sanitize_other_mics() {
+        let ids = ["a", "a", "b", "c", "c", "d", "e", "f", "g", "h"];
+        let other_mics = ids
+            .iter()
+            .enumerate()
+            .map(|(i, id)| OtherMic {
+                id: id.to_string(),
+                name: if i == 0 { "x".repeat(40) } else { "n".into() },
+                enabled: true,
+            })
+            .collect();
+        let c = Config {
+            other_mics,
+            ..Default::default()
+        }
+        .sanitized();
+        let got: Vec<&str> = c.other_mics.iter().map(|m| m.id.as_str()).collect();
+        assert_eq!(got, ["a", "b", "c", "d", "e", "f"]);
+        assert!(c.other_mics.len() <= MAX_OTHER_MICS);
+        assert!(c.other_mics.iter().all(|m| m.name.chars().count() <= OTHER_NAME_MAX));
     }
 }

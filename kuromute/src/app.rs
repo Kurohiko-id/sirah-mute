@@ -71,6 +71,8 @@ pub struct Changes {
     pub guard: bool,
     pub autostart: bool,
     pub talk: bool,
+    pub others: bool,
+    pub cough: bool,
 }
 
 pub fn diff(o: &Config, n: &Config) -> Changes {
@@ -95,6 +97,8 @@ pub fn diff(o: &Config, n: &Config) -> Changes {
         autostart: o.autostart != n.autostart,
         talk: o.talk_warn_enabled != n.talk_warn_enabled
             || o.talk_warn_mic_id != n.talk_warn_mic_id,
+        others: o.other_mics != n.other_mics || o.other_mics_position != n.other_mics_position,
+        cough: o.cough_hold != n.cough_hold || o.cough_hold_ms != n.cough_hold_ms,
     }
 }
 
@@ -1126,6 +1130,38 @@ mod tests {
             diff(&a, &b),
             Changes {
                 indicators: true,
+                ..Default::default()
+            }
+        );
+    }
+
+    #[test]
+    fn diff_other_mics_flags_others() {
+        let a = Config::default();
+        let b = Config {
+            other_mics_position: crate::config::Position::TopRight,
+            ..a.clone()
+        };
+        assert_eq!(
+            diff(&a, &b),
+            Changes {
+                others: true,
+                ..Default::default()
+            }
+        );
+    }
+
+    #[test]
+    fn diff_cough_flags_cough() {
+        let a = Config::default();
+        let b = Config {
+            cough_hold_ms: 900,
+            ..a.clone()
+        };
+        assert_eq!(
+            diff(&a, &b),
+            Changes {
+                cough: true,
                 ..Default::default()
             }
         );

@@ -343,6 +343,8 @@ pub fn features(c: &Config) -> Vec<String> {
     );
     on(c.autostart, "autostart");
     on(c.talk_warn_enabled, "talk_warn");
+    on(c.cough_hold, "cough_hold");
+    on(c.other_mics.iter().any(|m| m.enabled), "other_mics");
     on(c.hotkey != Hotkey::default(), "hotkey_custom");
     on(c.mic_id.is_some(), "mic_pinned");
     let lang = format!("lang_{:?}", c.language).to_lowercase();
@@ -438,14 +440,21 @@ mod tests {
                 sound_enabled: true,
                 talk_warn_enabled: true,
                 hotkey: Hotkey { mods: 0, vk: 124 },
+                cough_hold: true,
+                other_mics: vec![crate::config::OtherMic {
+                    id: "{0.0.1}.{secret}".into(),
+                    name: "PD400X".into(),
+                    enabled: true,
+                }],
                 ..Config::default()
             };
             let f = features(&c);
             assert!(f.len() > 10, "{f:?}");
+            assert!(f.contains(&"f_other_mics".to_string()) && f.contains(&"f_cough_hold".to_string()));
             for e in &f {
                 assert!(e.starts_with("f_") && valid_ev(e), "bad event name {e}");
                 assert!(
-                    !e.contains("secret") && !e.contains("124"),
+                    !e.contains("secret") && !e.contains("124") && !e.contains("PD400X"),
                     "user data in {e}"
                 );
             }
