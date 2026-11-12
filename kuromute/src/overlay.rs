@@ -197,6 +197,9 @@ pub(crate) fn create_window(class: PCWSTR, r: Rect, transparent: bool) -> Result
     }
 }
 
+/// A popup UpdateLayeredWindow is currently failing (logged once until it works again).
+static POPUP_FAILING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
 struct Popup {
     hwnd: HWND,
     dc: HDC,
@@ -474,7 +477,12 @@ impl Popup {
                 Some(&blend),
                 ULW_ALPHA,
             ) {
-                crate::log::write(format!("overlay: popup update failed: {e}"));
+                // log only the switch to failing: a locked/RDP session fails every clock tick
+                if !POPUP_FAILING.swap(true, std::sync::atomic::Ordering::Relaxed) {
+                    crate::log::write(format!("overlay: popup update failed: {e}"));
+                }
+            } else {
+                POPUP_FAILING.store(false, std::sync::atomic::Ordering::Relaxed);
             }
             let _ = SetWindowPos(
                 self.hwnd,
