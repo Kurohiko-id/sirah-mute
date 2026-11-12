@@ -226,6 +226,9 @@ pub fn post_to_core(name: PCWSTR) -> bool {
 pub const ST_LIVE: isize = 0;
 pub const ST_MUTED: isize = 1;
 pub const ST_NO_MIC: isize = 2;
+/// Remote replies are `REPLY_BASE + code`, so an older core that doesn't know
+/// MSG_REMOTE (DefWindowProc returns 0) can't pass for a live one.
+pub const REPLY_BASE: isize = 0x5300;
 
 /// Mirror of `State::last_muted` so `--status` answers even while `State` is borrowed.
 static LAST_STATUS: AtomicIsize = AtomicIsize::new(ST_NO_MIC);
@@ -238,9 +241,9 @@ pub fn status_code(last_muted: Option<bool>) -> isize {
     }
 }
 
-/// Reply code -> (stdout word, exit code). No reply / unknown code = core not running.
-pub fn status_word(code: Option<isize>) -> (&'static str, i32) {
-    match code {
+/// Raw reply -> (stdout word, exit code). No reply / unknown reply = core not running.
+pub fn status_word(reply: Option<isize>) -> (&'static str, i32) {
+    match reply.map(|r| r.wrapping_sub(REPLY_BASE)) {
         Some(ST_LIVE) => ("live", 0),
         Some(ST_MUTED) => ("muted", 1),
         Some(ST_NO_MIC) => ("no_mic", 2),
@@ -273,6 +276,10 @@ pub fn remote(action: usize) -> i32 {
 
 /// Answers MSG_REMOTE. Mute/unmute go through `with_state` so a borrowed State defers them.
 fn on_remote(m: u32, wp: WPARAM, lp: LPARAM) -> isize {
+    REPLY_BASE + remote_code(m, wp, lp)
+}
+
+fn remote_code(m: u32, wp: WPARAM, lp: LPARAM) -> isize {
     let cur = LAST_STATUS.load(Ordering::Relaxed);
     if wp.0 == 0 || cur == ST_NO_MIC {
         return cur;
@@ -1290,11 +1297,14 @@ mod tests {
 
     #[test]
     fn status_word_maps() {
-        assert_eq!(status_word(Some(0)), ("live", 0));
-        assert_eq!(status_word(Some(1)), ("muted", 1));
-        assert_eq!(status_word(Some(2)), ("no_mic", 2));
+        assert_eq!(status_word(Some(REPLY_BASE)), ("live", 0));
+        assert_eq!(status_word(Some(REPLY_BASE + 1)), ("muted", 1));
+        assert_eq!(status_word(Some(REPLY_BASE + 2)), ("no_mic", 2));
         assert_eq!(status_word(None), ("not_running", 3));
-        assert_eq!(status_word(Some(7)), ("not_running", 3));
+        assert_eq!(status_word(Some(REPLY_BASE + 7)), ("not_running", 3));
+        // an older core leaves the message to DefWindowProc, which returns 0
+        assert_eq!(status_word(Some(0)), ("not_running", 3));
+        assert_eq!(status_word(Some(1)), ("not_running", 3));
     }
 
     #[test]
