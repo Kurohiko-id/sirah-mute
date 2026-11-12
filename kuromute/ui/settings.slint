@@ -1,4 +1,4 @@
-import { Button, CheckBox, ComboBox, ScrollView, Slider, Palette as StdPalette } from "std-widgets.slint";
+import { Button, CheckBox, ComboBox, LineEdit, ScrollView, Slider, Palette as StdPalette } from "std-widgets.slint";
 
 export global Palette {
     out property <color> window-bg: #202020;
@@ -14,6 +14,11 @@ export global Palette {
 // Filled from Rust (ui::apply_lang); Task 9 re-applies on language change.
 export global Strings {
     in property <string> tab-mic;
+    in property <string> tab-others;
+    in property <string> others-add;
+    in property <string> others-remove;
+    in property <string> others-note;
+    in property <string> others-position;
     in property <string> tab-indicator;
     in property <string> tab-device;
     in property <string> tab-general;
@@ -81,6 +86,7 @@ export global Strings {
     in property <string> made-with-slint;
 }
 
+export struct OtherMicRow { device-index: int, name: string, enabled: bool }
 export struct MonitorItem { label: string, checked: bool }
 
 component SectionTitle inherits Text {
@@ -180,6 +186,17 @@ export component MainWindow inherits Window {
     in property <string> save-error;
     in property <string> core-info;
     callback test-mute();
+    // Other mics tab (filled by settings::others)
+    in-out property <[OtherMicRow]> other-rows;
+    in property <[string]> other-device-names;
+    in-out property <int> other-position-index: -1;
+    in property <bool> other-can-add;
+    callback other-add();
+    callback other-remove(int);
+    callback other-device(int, int);
+    callback other-name(int, string);
+    callback other-enabled(int, bool);
+    callback other-position-changed();
     // Penanda tab (filled by settings::penanda)
     in-out property <bool> pen-popup-enabled;
     in-out property <int> pen-position-index: -1;
@@ -243,9 +260,10 @@ export component MainWindow inherits Window {
                 spacing: 4px;
                 alignment: start;
                 SideItem { label: Strings.tab-mic; active: root.tab == 0; clicked => { root.tab = 0; } }
-                SideItem { label: Strings.tab-indicator; active: root.tab == 1; clicked => { root.tab = 1; } }
-                SideItem { label: Strings.tab-device; active: root.tab == 2; clicked => { root.tab = 2; } }
-                SideItem { label: Strings.tab-general; active: root.tab == 3; clicked => { root.tab = 3; } }
+                SideItem { label: Strings.tab-others; active: root.tab == 1; clicked => { root.tab = 1; } }
+                SideItem { label: Strings.tab-indicator; active: root.tab == 2; clicked => { root.tab = 2; } }
+                SideItem { label: Strings.tab-device; active: root.tab == 3; clicked => { root.tab = 3; } }
+                SideItem { label: Strings.tab-general; active: root.tab == 4; clicked => { root.tab = 4; } }
             }
         }
         VerticalLayout {
@@ -344,6 +362,50 @@ export component MainWindow inherits Window {
                     spacing: 8px;
                     alignment: start;
                     if root.save-error != "": Note { text: root.save-error; color: #ff6b6b; }
+                    SectionTitle { text: Strings.tab-others; }
+                    for r[i] in root.other-rows: Rectangle {
+                        min-height: 52px;
+                        border-radius: 6px;
+                        background: Palette.card-bg;
+                        HorizontalLayout {
+                            padding: 8px;
+                            padding-left: 16px;
+                            spacing: 8px;
+                            ComboBox {
+                                horizontal-stretch: 1;
+                                model: root.other-device-names;
+                                current-index: r.device-index;
+                                selected => { root.other-device(i, self.current-index); }
+                            }
+                            LineEdit {
+                                width: 150px;
+                                text: r.name;
+                                accepted => { root.other-name(i, self.text); }
+                                changed has-focus => { if !self.has-focus { root.other-name(i, self.text); } }
+                            }
+                            CheckBox { checked: r.enabled; toggled => { root.other-enabled(i, self.checked); } }
+                            Button { text: Strings.others-remove; clicked => { root.other-remove(i); } }
+                        }
+                    }
+                    Button { text: Strings.others-add; enabled: root.other-can-add; clicked => { root.other-add(); } }
+                    Row {
+                        label: Strings.others-position;
+                        ComboBox {
+                            width: 180px;
+                            model: Strings.positions;
+                            current-index <=> root.other-position-index;
+                            selected => { root.other-position-changed(); }
+                        }
+                    }
+                    Note { text: Strings.others-note; color: Palette.text-dim; }
+                }
+            }
+            if root.tab == 2: ScrollView {
+                VerticalLayout {
+                    padding: 24px;
+                    spacing: 8px;
+                    alignment: start;
+                    if root.save-error != "": Note { text: root.save-error; color: #ff6b6b; }
                     SectionTitle { text: Strings.sec-popup; }
                     Row {
                         label: Strings.popup-enabled;
@@ -425,7 +487,7 @@ export component MainWindow inherits Window {
                     }
                 }
             }
-            if root.tab == 2: ScrollView {
+            if root.tab == 3: ScrollView {
                 VerticalLayout {
                     padding: 24px;
                     spacing: 8px;
@@ -470,7 +532,7 @@ export component MainWindow inherits Window {
                     }
                 }
             }
-            if root.tab == 3: ScrollView {
+            if root.tab == 4: ScrollView {
                 VerticalLayout {
                     padding: 24px;
                     spacing: 8px;

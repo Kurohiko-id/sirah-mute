@@ -41,6 +41,11 @@ fn load_state() -> State {
 pub fn apply_lang(w: &MainWindow, lang: ResolvedLang) {
     let s = w.global::<Strings>();
     s.set_tab_mic(i18n::t(lang, Key::TabMic).into());
+    s.set_tab_others(i18n::t(lang, Key::TabOthers).into());
+    s.set_others_add(i18n::t(lang, Key::OthersAdd).into());
+    s.set_others_remove(i18n::t(lang, Key::OthersRemove).into());
+    s.set_others_note(i18n::t(lang, Key::OthersNote).into());
+    s.set_others_position(i18n::t(lang, Key::OthersPosition).into());
     s.set_tab_indicator(i18n::t(lang, Key::TabIndicator).into());
     s.set_tab_device(i18n::t(lang, Key::TabDevice).into());
     s.set_tab_general(i18n::t(lang, Key::TabGeneral).into());
@@ -336,19 +341,26 @@ pub fn run() -> i32 {
     };
     apply_lang(&w, i18n::resolve(state.borrow().cfg.language));
     let mic = super::mic::setup(&w, &state);
+    let others = super::others::setup(&w, &state, mic.sink);
     let (pen, flush_pen) = super::penanda::setup(&w, &state);
     let dev = super::device::setup(&w, &state, mic.sink);
     let refresh_mic = mic.refresh.clone();
     super::umum::setup(
         &w,
         &state,
-        vec![mic.refresh.clone(), pen.clone(), dev.clone()],
+        vec![
+            mic.refresh.clone(),
+            others.clone(),
+            pen.clone(),
+            dev.clone(),
+        ],
     );
     // Spec §3: re-read devices/monitors whenever a tab that lists them opens.
     w.on_tab_opened(move |t| match t {
         0 => refresh_mic(),
-        1 => pen(),
-        2 => dev(),
+        1 => others(),
+        2 => pen(),
+        3 => dev(),
         _ => {}
     });
     center_on_cursor_monitor(&w);

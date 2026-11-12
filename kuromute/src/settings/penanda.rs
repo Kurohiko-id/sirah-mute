@@ -11,7 +11,7 @@ use std::time::{Duration, Instant};
 
 type Action = Rc<dyn Fn()>;
 
-const POSITIONS: [Position; 6] = [
+pub const POSITIONS: [Position; 6] = [
     Position::TopLeft,
     Position::TopCenter,
     Position::TopRight,

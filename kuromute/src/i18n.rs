@@ -43,6 +43,11 @@ pub enum Key {
     ConfigCorrupt,
     AppName,
     TabMic,
+    TabOthers,
+    OthersAdd,
+    OthersRemove,
+    OthersNote,
+    OthersPosition,
     TabIndicator,
     TabDevice,
     TabGeneral,
@@ -143,7 +148,7 @@ pub enum Key {
 
 impl Key {
     #[cfg(test)]
-    pub const ALL: [Key; 114] = [
+    pub const ALL: [Key; 119] = [
         Key::Muted,
         Key::Unmuted,
         Key::MicDisconnected,
@@ -162,6 +167,11 @@ impl Key {
         Key::ConfigCorrupt,
         Key::AppName,
         Key::TabMic,
+        Key::TabOthers,
+        Key::OthersAdd,
+        Key::OthersRemove,
+        Key::OthersNote,
+        Key::OthersPosition,
         Key::TabIndicator,
         Key::TabDevice,
         Key::TabGeneral,
@@ -305,6 +315,16 @@ pub fn t(l: ResolvedLang, k: Key) -> &'static str {
         }
         (ConfigCorrupt, Id) => "File pengaturan rusak dan direset. Cadangan: config.json.bad",
         (TabMic, _) => "Mic",
+        (TabOthers, En) => "Other mics",
+        (TabOthers, Id) => "Mic lain",
+        (OthersAdd, En) => "+ Add mic",
+        (OthersAdd, Id) => "+ Tambah mic",
+        (OthersRemove, En) => "Remove",
+        (OthersRemove, Id) => "Hapus",
+        (OthersNote, En) => "A pill shows while this mic is muted. Click it to unmute.",
+        (OthersNote, Id) => "Pill muncul selama mic ini mute. Klik pill buat unmute.",
+        (OthersPosition, En) => "Pill position",
+        (OthersPosition, Id) => "Posisi pill",
         (TabIndicator, En) => "Indicator",
         (TabIndicator, Id) => "Penanda",
         (TabDevice, _) => "Device",

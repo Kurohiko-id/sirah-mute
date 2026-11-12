@@ -1,6 +1,7 @@
 
 pub mod device;
 pub mod mic;
+pub mod others;
 pub mod model;
 pub mod penanda;
 pub mod record;
