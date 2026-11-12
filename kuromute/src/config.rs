@@ -165,7 +165,8 @@ impl Config {
         };
         self.border_thickness = self.border_thickness.clamp(1, 30);
         self.cough_hold_ms = self.cough_hold_ms.clamp(200, 2000);
-        let mut seen = std::collections::HashSet::new();
+        // no duplicates, and the main mic can't also be an "other mic" row (the core skips it)
+        let mut seen: std::collections::HashSet<String> = self.mic_id.iter().cloned().collect();
         self.other_mics.retain(|m| seen.insert(m.id.clone()));
         self.other_mics.truncate(MAX_OTHER_MICS);
         for m in &mut self.other_mics {
@@ -548,6 +549,12 @@ mod tests {
         .sanitized();
         let got: Vec<&str> = c.other_mics.iter().map(|m| m.id.as_str()).collect();
         assert_eq!(got, ["a", "b", "c", "d", "e", "f"]);
+        let c = Config {
+            mic_id: Some("b".into()),
+            ..c
+        }
+        .sanitized();
+        assert!(c.other_mics.iter().all(|m| m.id != "b"));
         assert!(c.other_mics.len() <= MAX_OTHER_MICS);
         assert!(
             c.other_mics

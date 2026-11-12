@@ -168,22 +168,11 @@ pub fn setup(w: &MainWindow, state: &Rc<RefCell<State>>, sink: HWND) -> Rc<dyn F
     let (ww, st, devs2, show2) = (w.as_weak(), state.clone(), devs.clone(), show.clone());
     w.on_other_device(move |i, d| {
         let Some(w) = ww.upgrade() else { return };
-        let (id, new_auto, autos) = {
+        let changed = {
             let dv = devs2.borrow();
             let auto = |i: usize| short_name(&dv.names[i]);
-            let autos: Vec<(String, String)> = dv
-                .ids
-                .iter()
-                .enumerate()
-                .map(|(n, id)| (id.clone(), auto(n)))
-                .collect();
-            (
-                dv.ids.get(d as usize).cloned(),
-                dv.ids.get(d as usize).map(|_| auto(d as usize)),
-                autos,
-            )
-        };
-        let changed = {
+            let id = dv.ids.get(d as usize).cloned();
+            let new_auto = id.as_ref().map(|_| auto(d as usize));
             let mut s = st.borrow_mut();
             let taken = id.as_ref().is_some_and(|id| {
                 s.cfg
@@ -194,13 +183,10 @@ pub fn setup(w: &MainWindow, state: &Rc<RefCell<State>>, sink: HWND) -> Rc<dyn F
             });
             match (id, s.cfg.other_mics.get_mut(i as usize)) {
                 (Some(id), Some(m)) if !taken && m.id != id => {
-                    let old_auto = autos
-                        .iter()
-                        .find(|(i, _)| *i == m.id)
-                        .map(|(_, n)| n.as_str());
+                    let old_auto = dv.ids.iter().position(|x| *x == m.id).map(auto);
                     if let Some(n) = new_auto
                         .as_deref()
-                        .and_then(|na| follow_name(&m.name, old_auto, na))
+                        .and_then(|na| follow_name(&m.name, old_auto.as_deref(), na))
                     {
                         m.name = n;
                     }
