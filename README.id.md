@@ -45,20 +45,32 @@ Sirah Mute adalah versi baru Kuro Mute. Settingan lama otomatis kebawa waktu per
 
 ## Home Assistant (HASS Agent)
 
-Sirah Mute bisa dikontrol lewat command line, jadi HASS Agent bisa mute, unmute, dan baca status mic. Aplikasinya harus lagi jalan.
+Sirah Mute bisa dikontrol lewat PowerShell atau command line, jadi HASS Agent bisa mute, unmute, dan baca status mic. Aplikasinya harus lagi jalan.
 
-Command (HASS Agent, Custom atau PowerShell command):
+Dari PowerShell:
+
+```
+& "$env:LOCALAPPDATA\Programs\SirahMute\sirahmute.exe" --mute
+& "$env:LOCALAPPDATA\Programs\SirahMute\sirahmute.exe" --unmute
+& "$env:LOCALAPPDATA\Programs\SirahMute\sirahmute.exe" --status
+```
+
+Command di HASS Agent: pakai tipe command **Custom**. Tipe ini didukung dan direkomendasikan, karena lebih ringan dari tipe PowerShell.
 
 ```
 "%LOCALAPPDATA%\Programs\SirahMute\sirahmute.exe" --mute
 "%LOCALAPPDATA%\Programs\SirahMute\sirahmute.exe" --unmute
 ```
 
+Baris di atas cuma jalan di tipe Custom. Di tipe PowerShell nggak jalan.
+
 Sensor (PowerShell sensor):
 
 ```
-& "$env:LOCALAPPDATA\Programs\SirahMute\sirahmute.exe" --status | Out-String
+(& "$env:LOCALAPPDATA\Programs\SirahMute\sirahmute.exe" --status | Out-String).Trim()
 ```
+
+Bikin command dan sensornya di app HASS Agent itu sendiri, bukan di Satellite Service. Satellite Service jalan sebagai SYSTEM, jadi nggak bisa nyambung ke Sirah Mute yang jalan di akun kamu.
 
 `--status` nampilin satu kata dan juga ngisi exit code:
 
@@ -84,7 +96,7 @@ Semua data ini **sepenuhnya anonim**. Aku tidak tahu siapa yang menginstal Sirah
 **Yang dikirim:**
 
 - ID acak yang dibuat saat Sirah Mute pertama kali dibuka. ID ini tidak terhubung ke akun, nama, atau perangkat kalian.
-- Versi Sirah Mute, versi Windows, dan bahasa sistem.
+- Versi Sirah Mute, versi Windows, arsitektur CPU (x64/arm64), dan bahasa sistem.
 - Negara, diperkirakan dari koneksi. Alamat IP tidak disimpan.
 - Nama pengaturan yang sedang aktif, misalnya border Glow/Solid, popup Pill/Card beserta posisinya dan apakah tetap tampil selama mute, peringatan bicara saat mute, tahan buat batuk (`cough_hold`), mic lain (`other_mics`), beep, penjaga perangkat default, jalan saat Windows start, dan apakah hotkey diganti. Tiap pengaturan dihitung paling banyak sekali sehari, jadi tidak ada catatan per klik.
 - Seberapa sering kalian mute tiap hari, hanya dalam rentang kasar: berapa kali (1–5, 6–20, 21–50, lebih dari 50) dan total lamanya (di bawah 5 menit, 5–30 menit, 30 menit–2 jam, lebih lama). Waktu dan lama tiap mute tidak dikirim.
