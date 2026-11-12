@@ -406,7 +406,14 @@ pub fn install_panic_hook() {
             }
             seen.push(key);
         }
-        send("error", json!({ "msg": msg, "stack": stack }));
+        // Sent from a helper thread with a 2 s total budget: a panic on the UI thread must not
+        // freeze the tray for the full per-phase HTTP timeouts while offline.
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            send("error", json!({ "msg": msg, "stack": stack }));
+            let _ = tx.send(());
+        });
+        let _ = rx.recv_timeout(Duration::from_secs(2));
     }));
 }
 
