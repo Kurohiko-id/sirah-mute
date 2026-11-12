@@ -20,7 +20,8 @@ fn w(s: &str) -> Vec<u16> {
 }
 
 /// Sends one HTTPS request to `host:443`. Returns (status code, body up to 1 MB).
-/// `headers` are `\r\n`-separated; `timeout_ms` applies to every WinHTTP phase.
+/// `headers` are `\r\n`-separated; `timeout_ms` applies to each WinHTTP phase (resolve,
+/// connect, send, receive), so the worst case is about 4x `timeout_ms`.
 pub fn request(
     verb: &str,
     host: &str,

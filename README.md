@@ -45,20 +45,32 @@ Sirah Mute is the new version of Kuro Mute. It picks up your old settings automa
 
 ## Home Assistant (HASS Agent)
 
-Sirah Mute can be controlled from the command line, so HASS Agent can mute, unmute and report the mic state. The app must be running.
+Sirah Mute can be controlled from PowerShell or the command line, so HASS Agent can mute, unmute and report the mic state. The app must be running.
 
-Commands (HASS Agent, Custom or PowerShell command):
+From PowerShell:
+
+```
+& "$env:LOCALAPPDATA\Programs\SirahMute\sirahmute.exe" --mute
+& "$env:LOCALAPPDATA\Programs\SirahMute\sirahmute.exe" --unmute
+& "$env:LOCALAPPDATA\Programs\SirahMute\sirahmute.exe" --status
+```
+
+Commands in HASS Agent: use the **Custom** command type. It is supported and recommended, because it is lighter than the PowerShell type.
 
 ```
 "%LOCALAPPDATA%\Programs\SirahMute\sirahmute.exe" --mute
 "%LOCALAPPDATA%\Programs\SirahMute\sirahmute.exe" --unmute
 ```
 
+These lines only work in the Custom type. They don't work in the PowerShell type.
+
 Sensor (PowerShell sensor):
 
 ```
-& "$env:LOCALAPPDATA\Programs\SirahMute\sirahmute.exe" --status | Out-String
+(& "$env:LOCALAPPDATA\Programs\SirahMute\sirahmute.exe" --status | Out-String).Trim()
 ```
+
+Create the commands and the sensor in the HASS Agent app itself, not in the Satellite Service. The Satellite Service runs as SYSTEM, so it can't reach the Sirah Mute running in your account.
 
 `--status` prints one word and also sets the exit code:
 
@@ -84,7 +96,7 @@ All of this is **fully anonymous**. I don't know who installed Sirah Mute, and I
 **What is sent:**
 
 - A random ID created the first time Sirah Mute opens. It isn't linked to your accounts, your name, or your device.
-- Sirah Mute version, Windows version, and system language.
+- Sirah Mute version, Windows version, CPU architecture (x64/arm64), and system language.
 - Country, estimated from the connection. IP addresses are not stored.
 - Names of the settings that are switched on, such as border Glow/Solid, popup Pill/Card, its corner and whether it stays up while muted, talk-while-muted warning, hold to cough (`cough_hold`), other mics (`other_mics`), beep, default-device guard, start with Windows, and whether you changed the hotkey. Each one is counted at most once a day, so there is no per-click record.
 - How much you muted each day, as rough ranges only: how many times (1–5, 6–20, 21–50, more than 50) and for how long in total (under 5 minutes, 5–30 minutes, 30 minutes–2 hours, longer). Not the exact times or lengths of each mute.

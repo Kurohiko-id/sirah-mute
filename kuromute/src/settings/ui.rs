@@ -1,5 +1,5 @@
 use super::save::{self, CoreReply, SaveOutcome, StatusKey};
-use crate::config::{self, Config, LoadOutcome};
+use crate::config::{self, Config};
 use crate::i18n::{self, Key, ResolvedLang};
 use crate::msg::{MSG_RELOAD, WINDOW_CLASS};
 use slint::ComponentHandle;
@@ -13,27 +13,38 @@ use windows::core::PCWSTR;
 
 slint::include_modules!();
 
-/// State shared by the settings tabs (extended by Tasks 6-9).
+/// State shared by the settings tabs.
 pub struct State {
+    /// What the controls show and edit.
     pub cfg: Config,
-    /// false = config was Corrupt/Unreadable at startup; later tasks must not overwrite blindly.
-    pub startup_load_ok: bool,
+    /// The config this process last loaded or saved; `commit` writes only keys where `cfg`
+    /// differs from it, so changes the core saved meanwhile survive.
+    base: Config,
+    /// Re-shows controls after a save pulled in values from disk. The core itself only changes
+    /// `guard_enabled` (tray menu), which lives on the Device tab.
+    pub reshow: Option<Rc<dyn Fn()>>,
+}
+
+/// Read-only read of config.json; never renames a bad file. If it can't be read, asks the core
+/// to reload once (the core backs a corrupt file up and re-saves its own config), then retries.
+fn read_config() -> Result<Option<Config>, String> {
+    let path = config::config_path();
+    config::read(&path).or_else(|_| {
+        send_to_core(MSG_RELOAD, 0, 0);
+        config::read(&path)
+    })
 }
 
 fn load_state() -> State {
-    match config::load(&config::config_path()) {
-        LoadOutcome::Loaded(cfg) => State {
-            cfg,
-            startup_load_ok: true,
-        },
-        LoadOutcome::Missing => State {
-            cfg: Config::default(),
-            startup_load_ok: true,
-        },
-        _ => State {
-            cfg: Config::default(),
-            startup_load_ok: false,
-        },
+    let cfg = read_config().unwrap_or_else(|e| {
+        crate::log!("settings: config not readable at startup ({e}); showing defaults");
+        None
+    });
+    let cfg = cfg.unwrap_or_default();
+    State {
+        base: cfg.clone(),
+        cfg,
+        reshow: None,
     }
 }
 
@@ -164,18 +175,35 @@ pub fn send_to_core(name: PCWSTR, wp: usize, lp: isize) -> Option<(isize, bool)>
     }
 }
 
-/// The one save path for every control: write config, ask core to reload, show the outcome.
+/// The one save path for every control: merge our changes onto a fresh read of the file, write
+/// it, ask core to reload, show the outcome. A file that can't be read is never overwritten.
 /// Takes the RefCell, not a borrow: the borrow is released before SendMessageTimeoutW, which
 /// pumps sent messages and could re-enter other callbacks.
 pub fn commit(state: &RefCell<State>, w: &MainWindow) -> SaveOutcome {
-    let (cfg, load_ok) = {
+    let (ours, base) = {
         let s = state.borrow();
-        (s.cfg.clone(), s.startup_load_ok)
+        (s.cfg.clone(), s.base.clone())
     };
-    let lang = i18n::resolve(cfg.language);
+    let lang = i18n::resolve(ours.language);
+    let disk = read_config();
+    let load_ok = disk.is_ok();
+    // missing file: nothing to keep, so merging onto `base` gives `ours`
+    let disk = disk.ok().flatten().unwrap_or_else(|| base.clone());
+    let cfg = save::merge(&base, &ours, &disk);
     let out = save::save_and_reload(load_ok, &config::config_path(), &cfg, || {
         send_to_core(MSG_RELOAD, 0, 0)
     });
+    if matches!(out, SaveOutcome::Saved(_)) {
+        let reshow = {
+            let mut s = state.borrow_mut();
+            s.cfg = cfg.clone();
+            s.base = cfg.clone();
+            s.reshow.clone().filter(|_| cfg != ours)
+        };
+        if let Some(f) = reshow {
+            f();
+        }
+    }
     match &out {
         SaveOutcome::Blocked => w.set_save_error(i18n::t(lang, Key::SaveBlocked).into()),
         SaveOutcome::WriteFailed(e) => {
@@ -345,6 +373,7 @@ pub fn run() -> i32 {
     let others = super::others::setup(&w, &state, mic.sink);
     let (pen, flush_pen) = super::penanda::setup(&w, &state);
     let dev = super::device::setup(&w, &state, mic.sink);
+    state.borrow_mut().reshow = Some(dev.clone());
     let refresh_mic = mic.refresh.clone();
     super::umum::setup(
         &w,

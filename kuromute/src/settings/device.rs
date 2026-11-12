@@ -30,19 +30,9 @@ fn entries(
     (ids, all, idx)
 }
 
-/// Binds the tab; the returned closure re-reads the device lists (tab opened).
+/// Binds the tab; the returned closure re-reads the device lists and re-shows the toggles
+/// (tab opened, or the tray changed "Guard devices" meanwhile).
 pub fn setup(w: &MainWindow, state: &Rc<RefCell<State>>, sink: HWND) -> Rc<dyn Fn()> {
-    {
-        let s = state.borrow();
-        w.set_dev_force(s.cfg.force_on_startup);
-        w.set_dev_guard(s.cfg.guard_enabled);
-        w.set_dev_guard_mode(
-            MODES
-                .iter()
-                .position(|m| *m == s.cfg.guard_mode)
-                .map_or(-1, |i| i as i32),
-        );
-    }
     let (out_ids, in_ids): (Ids, Ids) = (Rc::default(), Rc::default());
 
     let (ww, st, oi, ii) = (w.as_weak(), state.clone(), out_ids.clone(), in_ids.clone());
@@ -50,6 +40,14 @@ pub fn setup(w: &MainWindow, state: &Rc<RefCell<State>>, sink: HWND) -> Rc<dyn F
         let Some(w) = ww.upgrade() else { return };
         let (inp, out, lang) = {
             let s = st.borrow();
+            w.set_dev_force(s.cfg.force_on_startup);
+            w.set_dev_guard(s.cfg.guard_enabled);
+            w.set_dev_guard_mode(
+                MODES
+                    .iter()
+                    .position(|m| *m == s.cfg.guard_mode)
+                    .map_or(-1, |i| i as i32),
+            );
             (
                 s.cfg.default_input_id.clone(),
                 s.cfg.default_output_id.clone(),

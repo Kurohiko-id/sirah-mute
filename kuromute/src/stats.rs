@@ -28,6 +28,9 @@ struct State {
     uday: Option<String>,
     mutes: u32,
     muted_s: u64,
+    /// UTC day of `fsent`: features already sent that day (kept across restarts).
+    fday: Option<String>,
+    fsent: HashSet<String>,
     #[serde(skip)]
     since: Option<Instant>,
 }
@@ -48,10 +51,12 @@ fn with_state<R>(f: impl FnOnce(&mut State) -> R) -> Option<R> {
     Some(f(&mut g))
 }
 /// Serialises under the lock, writes outside it (the mute path must not wait on disk).
+/// Atomic, and one writer at a time (stats thread and core exit share the tmp file).
 fn persist() {
+    static DISK: Mutex<()> = Mutex::new(());
+    let Ok(_g) = DISK.lock() else { return };
     if let Some(b) = with_state(|st| serde_json::to_vec(st).unwrap_or_default()) {
-        let _ = std::fs::create_dir_all(crate::config::data_dir());
-        let _ = std::fs::write(state_path(), b);
+        let _ = crate::config::write_atomic(&state_path(), &b);
     }
 }
 
@@ -63,10 +68,6 @@ fn load_state() -> State {
         .ok()
         .and_then(|b| serde_json::from_slice(&b).ok())
         .unwrap_or_default()
-}
-fn save_state(st: &State) {
-    let _ = std::fs::create_dir_all(crate::config::data_dir());
-    let _ = std::fs::write(state_path(), serde_json::to_vec(st).unwrap_or_default());
 }
 
 /// Release builds outside a cargo `target` folder (installer / portable zip).
@@ -142,12 +143,12 @@ pub fn init() {
         return;
     }
     let mut st = load_state();
-    if st.uid.is_empty() {
+    let fresh = st.uid.is_empty();
+    if fresh {
         st.uid = new_uid();
         if st.uid.is_empty() {
             return;
         }
-        save_state(&st);
     }
     let _ = BASE.set(Base {
         uid: st.uid.clone(),
@@ -156,6 +157,9 @@ pub fn init() {
         lang: locale(),
     });
     let _ = ST.set(Mutex::new(st));
+    if fresh {
+        persist();
+    }
 }
 
 /// POSTs one event; true on 2xx. Silent on every failure.
@@ -206,7 +210,6 @@ pub fn start() {
             }
         });
         persist();
-        let mut sent = HashSet::new();
         loop {
             let day = today();
             let need_ping = with_state(|st| st.day.as_deref() != Some(&day)) == Some(true);
@@ -222,11 +225,11 @@ pub fn start() {
                 }
             }
             if let Some(cfg) = read_config() {
-                for f in features(&cfg) {
-                    // once per feature per day; a failed send is not retried that day
-                    if sent.insert(format!("{day}{f}")) {
-                        send(&f, json!({}));
-                    }
+                // once per feature per day; a failed send is not retried that day
+                let new = with_state(|st| unsent_features(st, &day, features(&cfg)));
+                persist();
+                for f in new.unwrap_or_default() {
+                    send(&f, json!({}));
                 }
             }
             std::thread::sleep(Duration::from_secs(3600));
@@ -259,9 +262,21 @@ pub fn flush() {
     persist();
 }
 
-/// Folds the running mute into the total; on a new day returns the finished day's
+/// Features in `feats` not yet sent on `day`, marked as sent. The set starts over each day.
+fn unsent_features(st: &mut State, day: &str, feats: Vec<String>) -> Vec<String> {
+    if st.fday.as_deref() != Some(day) {
+        st.fday = Some(day.into());
+        st.fsent.clear();
+    }
+    feats
+        .into_iter()
+        .filter(|f| st.fsent.insert(f.clone()))
+        .collect()
+}
+
+/// Folds the running mute into the total; on a new (UTC) day returns the finished day's
 /// (mutes, seconds) when there was at least one mute, and starts the new day.
-// ponytail: hourly tick, so up to an hour after midnight still counts for the old day
+// ponytail: hourly tick, so up to an hour after UTC midnight still counts for the old day
 fn roll_usage(st: &mut State, day: &str, now: Instant) -> Option<(u32, u64)> {
     if let Some(t) = st.since {
         st.muted_s += now.saturating_duration_since(t).as_secs();
@@ -296,8 +311,9 @@ fn usage_events(mutes: u32, secs: u64) -> [String; 2] {
 
 /// Read-only: never renames a corrupt file like `config::load` does.
 fn read_config() -> Option<Config> {
-    let b = std::fs::read(crate::config::config_path()).ok()?;
-    serde_json::from_slice(b.strip_prefix(b"\xEF\xBB\xBF").unwrap_or(&b)).ok()
+    crate::config::read(&crate::config::config_path())
+        .ok()
+        .flatten()
 }
 
 /// Features currently switched on. Only setting names, never ids or names from the config.
@@ -390,7 +406,14 @@ pub fn install_panic_hook() {
             }
             seen.push(key);
         }
-        send("error", json!({ "msg": msg, "stack": stack }));
+        // Sent from a helper thread with a 2 s total budget: a panic on the UI thread must not
+        // freeze the tray for the full per-phase HTTP timeouts while offline.
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            send("error", json!({ "msg": msg, "stack": stack }));
+            let _ = tx.send(());
+        });
+        let _ = rx.recv_timeout(Duration::from_secs(2));
     }));
 }
 
@@ -525,6 +548,19 @@ mod tests {
         st.since = None;
         st.mutes = 0;
         assert_eq!(roll_usage(&mut st, "2026-11-14", t0), None);
+    }
+
+    #[test]
+    fn features_sent_once_per_day() {
+        let mut st = State::default();
+        let f = || vec!["f_sound".to_string(), "f_autostart".to_string()];
+        assert_eq!(unsent_features(&mut st, "2026-11-12", f()).len(), 2);
+        // a restart reloads the saved state: nothing again the same day
+        let mut st: State = serde_json::from_slice(&serde_json::to_vec(&st).unwrap()).unwrap();
+        assert!(unsent_features(&mut st, "2026-11-12", f()).is_empty());
+        // next day: sent again, and the old day's entries are dropped
+        assert_eq!(unsent_features(&mut st, "2026-11-13", f()).len(), 2);
+        assert_eq!(st.fsent.len(), 2);
     }
 
     #[test]
