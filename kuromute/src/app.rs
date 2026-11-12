@@ -420,7 +420,9 @@ struct State {
 }
 
 impl State {
-    fn balloon(&self, body: &str) {
+    /// Every balloon drops the previous click action; callers that want one set it after.
+    fn balloon(&mut self, body: &str) {
+        self.pending_balloon = None;
         self.tray.balloon(t(self.lang, Key::AppName), body);
     }
 
