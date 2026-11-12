@@ -121,5 +121,6 @@ fn main() {
         },
         _ => app::run(),
     };
+    log::flush();
     std::process::exit(code);
 }

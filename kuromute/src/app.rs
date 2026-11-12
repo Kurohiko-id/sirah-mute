@@ -916,6 +916,10 @@ impl State {
         self.others.destroy();
         self.prompt = None;
         self.tray.remove();
+        // On WM_ENDSESSION Windows may kill us before the message loop ends,
+        // so save stats and the log now; run() flushes again (harmless).
+        crate::stats::flush();
+        log::flush();
         unsafe { PostQuitMessage(0) };
     }
 
@@ -1312,7 +1316,7 @@ pub fn run() -> i32 {
     }
     STATE.with(|c| c.borrow_mut().take());
     crate::stats::flush();
-    log::write_sync("exit");
+    log!("exit");
     0
 }
 

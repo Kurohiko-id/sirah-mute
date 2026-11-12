@@ -3,12 +3,19 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 use std::sync::mpsc::{Sender, channel};
+use std::time::Duration;
 use windows::Win32::System::SystemInformation::GetLocalTime;
 
 const MAX_BYTES: u64 = 1_000_000;
 const KEEP: usize = 3;
 
-static TX: OnceLock<Sender<String>> = OnceLock::new();
+enum Msg {
+    Line(String),
+    /// Acked once every line queued before it is on disk.
+    Flush(Sender<()>),
+}
+
+static TX: OnceLock<Sender<Msg>> = OnceLock::new();
 static DIR: OnceLock<PathBuf> = OnceLock::new();
 
 #[macro_export]
@@ -66,20 +73,36 @@ pub fn init(dir: &Path) {
     let _ = fs::create_dir_all(dir);
     let dir = dir.to_path_buf();
     let _ = DIR.set(dir.clone());
-    let (tx, rx) = channel::<String>();
+    let (tx, rx) = channel::<Msg>();
     if TX.set(tx).is_err() {
         return;
     }
     std::thread::spawn(move || {
         for msg in rx {
-            append(&dir, &msg);
+            match msg {
+                Msg::Line(m) => append(&dir, &m),
+                Msg::Flush(ack) => {
+                    let _ = ack.send(());
+                }
+            }
         }
     });
 }
 
 pub fn write(msg: impl Into<String>) {
     if let Some(tx) = TX.get() {
-        let _ = tx.send(msg.into());
+        let _ = tx.send(Msg::Line(msg.into()));
+    }
+}
+
+/// Waits (up to 200 ms) until every line queued so far is written. Call before
+/// the process exits, or the logger thread dies with the tail of the queue.
+pub fn flush() {
+    if let Some(tx) = TX.get() {
+        let (ack, done) = channel();
+        if tx.send(Msg::Flush(ack)).is_ok() {
+            let _ = done.recv_timeout(Duration::from_millis(200));
+        }
     }
 }
 
@@ -136,6 +159,16 @@ mod tests {
         assert_eq!(fs::read_to_string(d.join("sirahmute.log.2")).unwrap(), "a");
         assert_eq!(fs::read_to_string(d.join("sirahmute.log.3")).unwrap(), "b");
         assert!(!d.join("sirahmute.log.4").exists());
+    }
+
+    #[test]
+    fn flush_writes_queued_lines() {
+        let d = tmp("flush");
+        init(&d);
+        write("queued line");
+        flush();
+        let log = fs::read_to_string(d.join("sirahmute.log")).unwrap();
+        assert!(log.contains("queued line"));
     }
 
     #[test]
