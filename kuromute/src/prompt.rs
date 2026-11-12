@@ -72,16 +72,20 @@ pub struct Row {
 }
 
 thread_local! {
-    /// Button hit boxes of the visible prompt, window-relative. Only one prompt exists at a time.
-    static BUTTONS: Cell<[Rect; 3]> = const { Cell::new([NO_RECT; 3]) };
+    /// Owner hwnd and button hit boxes (window-relative) of the visible prompt. Keyed by hwnd so
+    /// dropping an older prompt can't wipe a newer one's boxes.
+    static BUTTONS: Cell<(HWND, [Rect; 3])> =
+        const { Cell::new((HWND(std::ptr::null_mut()), [NO_RECT; 3])) };
 }
 
-fn button_at(x: i32, y: i32) -> Option<usize> {
-    BUTTONS.with(|b| {
-        b.get()
-            .iter()
-            .position(|r| x >= r.left && x < r.right && y >= r.top && y < r.bottom)
-    })
+fn button_at(h: HWND, x: i32, y: i32) -> Option<usize> {
+    let (owner, rects) = BUTTONS.with(Cell::get);
+    if owner != h {
+        return None;
+    }
+    rects
+        .iter()
+        .position(|r| x >= r.left && x < r.right && y >= r.top && y < r.bottom)
 }
 
 unsafe extern "system" fn wndproc(h: HWND, m: u32, wp: WPARAM, lp: LPARAM) -> LRESULT {
@@ -92,7 +96,7 @@ unsafe extern "system" fn wndproc(h: HWND, m: u32, wp: WPARAM, lp: LPARAM) -> LR
             let mut pt = POINT::default();
             let _ = GetCursorPos(&mut pt);
             let _ = ScreenToClient(h, &mut pt);
-            let id = if button_at(pt.x, pt.y).is_some() {
+            let id = if button_at(h, pt.x, pt.y).is_some() {
                 IDC_HAND
             } else {
                 IDC_ARROW
@@ -102,7 +106,7 @@ unsafe extern "system" fn wndproc(h: HWND, m: u32, wp: WPARAM, lp: LPARAM) -> LR
         },
         WM_LBUTTONUP => {
             let (x, y) = (lp.0 as i16 as i32, (lp.0 >> 16) as i16 as i32);
-            if let (Some(i), Ok(c)) = (button_at(x, y), core()) {
+            if let (Some(i), Ok(c)) = (button_at(h, x, y), core()) {
                 let _ = unsafe { PostMessageW(Some(c), WM_APP_DRIFT_CHOICE, WPARAM(i), LPARAM(0)) };
             }
             LRESULT(0)
@@ -124,7 +128,11 @@ pub struct Prompt {
 
 impl Drop for Prompt {
     fn drop(&mut self) {
-        BUTTONS.with(|b| b.set([NO_RECT; 3]));
+        BUTTONS.with(|b| {
+            if b.get().0 == self.hwnd {
+                b.set((HWND(std::ptr::null_mut()), [NO_RECT; 3]));
+            }
+        });
         let _ = unsafe { DestroyWindow(self.hwnd) };
     }
 }
@@ -214,7 +222,7 @@ pub fn show(mon: &Monitor, lang: ResolvedLang, title: Key, rows: &[Row]) -> Resu
                 Some(&blend),
                 ULW_ALPHA,
             )?;
-            BUTTONS.with(|b| b.set(hits));
+            BUTTONS.with(|b| b.set((hwnd, hits)));
             let _ = SetWindowPos(
                 hwnd,
                 Some(HWND_TOPMOST),
