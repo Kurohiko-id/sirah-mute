@@ -6,6 +6,7 @@ mod config;
 mod enforcer;
 mod geometry;
 mod hotkey;
+mod http;
 mod i18n;
 mod log;
 mod migrate;
