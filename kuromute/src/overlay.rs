@@ -1,5 +1,5 @@
 //! Layered overlay windows: per-monitor mute popup (Direct2D-rendered, per-pixel
-//! alpha) and red border strips. Windows never take focus or mouse input.
+//! alpha) and red border strips. Windows never take focus; only the muted Pill takes clicks.
 
 use crate::config::{BorderStyle, Config, PopupStyle, Position};
 use crate::geometry::{Rect, border_strips, popup_rect};
@@ -36,8 +36,10 @@ use windows::Win32::Graphics::Gdi::{
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::UI::WindowsAndMessaging::{
     BeginDeferWindowPos, CreateWindowExW, DefWindowProcW, DeferWindowPos, DestroyWindow,
-    EndDeferWindowPos, FindWindowW, HTTRANSPARENT, HWND_TOPMOST, KillTimer, LWA_ALPHA,
-    MA_NOACTIVATE, PostMessageW, RegisterClassExW, SET_WINDOW_POS_FLAGS, SWP_HIDEWINDOW,
+    EndDeferWindowPos, FindWindowW, GWLP_USERDATA, GetWindowLongPtrW, HTCLIENT, HTTRANSPARENT,
+    HWND_TOPMOST, IDC_HAND, KillTimer, LWA_ALPHA, LoadCursorW, MA_NOACTIVATE, PostMessageW,
+    RegisterClassExW, SET_WINDOW_POS_FLAGS, SWP_HIDEWINDOW, SetCursor, SetWindowLongPtrW,
+    WM_LBUTTONUP, WM_SETCURSOR,
     SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOREDRAW, SWP_NOSIZE, SWP_SHOWWINDOW,
     SetLayeredWindowAttributes, SetTimer, SetWindowPos, ULW_ALPHA, UpdateLayeredWindow, WM_CLOSE,
     WM_MOUSEACTIVATE, WM_NCHITTEST, WNDCLASSEXW, WS_EX_LAYERED, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW,
@@ -53,6 +55,7 @@ const BLINK_MS: u32 = 550;
 const BLINKS: u32 = 3;
 const POPUP_HIDE_MS: u32 = 1500;
 const POPUP_CLASS: PCWSTR = w!("SirahMutePopup");
+const PILL_CLASS: PCWSTR = w!("SirahMutePill");
 const BORDER_CLASS: PCWSTR = w!("SirahMuteBorder");
 const BORDER_COLOR: COLORREF = COLORREF(0x004D_48E5); // #E5484D as 0x00BBGGRR
 const BORDER_RGB: u32 = 0xE5484D;
@@ -93,6 +96,53 @@ unsafe extern "system" fn wndproc(h: HWND, m: u32, wp: WPARAM, lp: LPARAM) -> LR
     }
 }
 
+/// Pill hit test: clickable while the muted pill shows, click-through otherwise
+/// (so clicks during the brief "Mic on" pill reach the game).
+pub fn pill_hit(muted_shown: bool) -> u32 {
+    if muted_shown {
+        HTCLIENT
+    } else {
+        HTTRANSPARENT as u32
+    }
+}
+
+/// Shared by clickable overlay windows: never take focus, hand cursor.
+pub(crate) fn clickable_common(m: u32) -> Option<LRESULT> {
+    match m {
+        WM_MOUSEACTIVATE => Some(LRESULT(MA_NOACTIVATE as isize)),
+        WM_SETCURSOR => {
+            unsafe { SetCursor(LoadCursorW(None, IDC_HAND).ok()) };
+            Some(LRESULT(1))
+        }
+        _ => None,
+    }
+}
+
+/// Posts a click message to the core window.
+pub(crate) fn post_to_core(m: u32, wp: usize, lp: isize) {
+    if let Ok(core) = unsafe { FindWindowW(crate::msg::WINDOW_CLASS, PCWSTR::null()) } {
+        let _ = unsafe { PostMessageW(Some(core), m, WPARAM(wp), LPARAM(lp)) };
+    }
+}
+
+unsafe extern "system" fn pill_proc(h: HWND, m: u32, wp: WPARAM, lp: LPARAM) -> LRESULT {
+    if let Some(r) = clickable_common(m) {
+        return r;
+    }
+    match m {
+        WM_NCHITTEST => {
+            let shown = unsafe { GetWindowLongPtrW(h, GWLP_USERDATA) } != 0;
+            LRESULT(pill_hit(shown) as isize)
+        }
+        WM_LBUTTONUP => {
+            post_to_core(crate::msg::WM_APP_PILL_CLICK, 0, 0);
+            LRESULT(0)
+        }
+        WM_CLOSE => unsafe { wndproc(h, m, wp, lp) },
+        _ => unsafe { DefWindowProcW(h, m, wp, lp) },
+    }
+}
+
 pub(crate) fn hinstance() -> HINSTANCE {
     unsafe { GetModuleHandleW(None) }
         .map(|m| HINSTANCE(m.0))
@@ -110,16 +160,21 @@ fn register_classes() {
             ..Default::default()
         };
         RegisterClassExW(&wc);
+        wc.lpszClassName = PILL_CLASS;
+        wc.lpfnWndProc = Some(pill_proc);
+        RegisterClassExW(&wc);
+        wc.lpfnWndProc = Some(wndproc);
         wc.lpszClassName = BORDER_CLASS;
         wc.hbrBackground = CreateSolidBrush(BORDER_COLOR);
         RegisterClassExW(&wc);
     });
 }
 
-fn create_window(class: PCWSTR, r: Rect) -> Result<HWND> {
+fn create_window(class: PCWSTR, r: Rect, transparent: bool) -> Result<HWND> {
+    let click = if transparent { WS_EX_TRANSPARENT } else { Default::default() };
     unsafe {
         CreateWindowExW(
-            WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_TRANSPARENT | WS_EX_TOPMOST | WS_EX_LAYERED,
+            WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | click | WS_EX_TOPMOST | WS_EX_LAYERED,
             class,
             PCWSTR::null(),
             WS_POPUP,
@@ -343,6 +398,8 @@ impl Popup {
             AlphaFormat: AC_SRC_ALPHA as u8,
         };
         unsafe {
+            // Pill is clickable only while the muted pill (slot 1/2) shows.
+            SetWindowLongPtrW(self.hwnd, GWLP_USERDATA, (slot > 0) as isize);
             SelectObject(self.dc, self.bmp[slot].into());
             let _ = UpdateLayeredWindow(
                 self.hwnd,
@@ -369,6 +426,7 @@ impl Popup {
 
     fn hide(&self) {
         unsafe {
+            SetWindowLongPtrW(self.hwnd, GWLP_USERDATA, 0);
             let _ = SetWindowPos(
                 self.hwnd,
                 None,
@@ -531,7 +589,10 @@ impl Renderer {
             },
             ..Default::default()
         };
-        let hwnd = create_window(POPUP_CLASS, rect)?;
+        let hwnd = match style {
+            PopupStyle::Pill => create_window(PILL_CLASS, rect, false)?,
+            PopupStyle::Card => create_window(POPUP_CLASS, rect, true)?,
+        };
         let mut p = Popup {
             hwnd,
             dc: unsafe { CreateCompatibleDC(None) },
@@ -751,7 +812,7 @@ impl Indicators {
             let depth = if self.glow { glow_extent(t) } else { t };
             for m in mons {
                 for r in border_strips(m.rect, depth) {
-                    let h = match create_window(BORDER_CLASS, r) {
+                    let h = match create_window(BORDER_CLASS, r, true) {
                         Ok(h) => h,
                         Err(e) => {
                             crate::log::write(format!("overlay: border strip failed: {e}"));
@@ -1066,6 +1127,12 @@ impl Drop for Indicators {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn pill_hit_transparent_unless_muted() {
+        assert_eq!(pill_hit(true), HTCLIENT);
+        assert_eq!(pill_hit(false), HTTRANSPARENT as u32);
+    }
 
     #[test]
     fn glow_falloff() {

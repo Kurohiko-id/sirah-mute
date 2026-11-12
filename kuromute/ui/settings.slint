@@ -39,6 +39,7 @@ export global Strings {
     in property <string> popup-position;
     in property <string> popup-scale;
     in property <string> popup-persist;
+    in property <string> pill-click-hint;
     in property <[string]> popup-styles;
     in property <string> sec-border;
     in property <string> border-enabled;
@@ -358,6 +359,7 @@ export component MainWindow inherits Window {
                         label: Strings.popup-persist;
                         CheckBox { checked <=> root.pen-persist; toggled => { root.pen-changed(); } }
                     }
+                    if root.pen-popup-enabled && root.pen-popup-style-index == 1 && !root.pen-persist: Note { text: Strings.pill-click-hint; color: Palette.text-dim; }
                     SectionTitle { text: Strings.sec-border; }
                     Row {
                         label: Strings.border-enabled;

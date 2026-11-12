@@ -66,6 +66,7 @@ pub fn apply_lang(w: &MainWindow, lang: ResolvedLang) {
     s.set_popup_position(i18n::t(lang, Key::PopupPosition).into());
     s.set_popup_scale(i18n::t(lang, Key::PopupScale).into());
     s.set_popup_persist(i18n::t(lang, Key::PopupPersist).into());
+    s.set_pill_click_hint(i18n::t(lang, Key::PillClickHint).into());
     s.set_popup_styles(super::mic::model(
         [Key::PopupCard, Key::PopupPill]
             .iter()

@@ -75,6 +75,7 @@ pub enum Key {
     PopupPosition,
     PopupScale,
     PopupPersist,
+    PillClickHint,
     SecBorder,
     BorderEnabled,
     BorderThickness,
@@ -140,7 +141,7 @@ pub enum Key {
 
 impl Key {
     #[cfg(test)]
-    pub const ALL: [Key; 111] = [
+    pub const ALL: [Key; 112] = [
         Key::Muted,
         Key::Unmuted,
         Key::MicDisconnected,
@@ -191,6 +192,7 @@ impl Key {
         Key::PopupPosition,
         Key::PopupScale,
         Key::PopupPersist,
+        Key::PillClickHint,
         Key::SecBorder,
         Key::BorderEnabled,
         Key::BorderThickness,
@@ -372,6 +374,8 @@ pub fn t(l: ResolvedLang, k: Key) -> &'static str {
         (PopupScale, Id) => "Ukuran",
         (PopupPersist, En) => "Keep popup while muted",
         (PopupPersist, Id) => "Popup tetap tampil saat mute",
+        (PillClickHint, En) => "Turn on \u{201C}Keep popup while muted\u{201D} so the pill stays clickable.",
+        (PillClickHint, Id) => "Nyalain \u{201C}Popup tetap tampil saat mute\u{201D} biar pill bisa diklik kapan aja.",
         (SecBorder, En) => "SCREEN BORDER",
         (SecBorder, Id) => "BINGKAI LAYAR",
         (BorderEnabled, En) => "Show border",

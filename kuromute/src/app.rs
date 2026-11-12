@@ -832,6 +832,13 @@ impl State {
             }
             WM_APP_TRAY => self.on_tray(lp),
             WM_APP_DRIFT_CHOICE => self.on_drift_choice(wp.0),
+            WM_APP_PILL_CLICK if wp.0 == 0 => {
+                if self.last_muted == Some(true)
+                    && let Err(e) = self.audio.set_mute(false)
+                {
+                    log!("pill click unmute failed: {e}");
+                }
+            }
             WM_APP_UPDATE => self.on_update(wp.0 != 0),
             _ if m == r.toggle => self.on_toggle(),
             _ if m == r.reload => self.reload(),
@@ -885,6 +892,7 @@ fn is_ours(m: u32) -> bool {
             | WM_APP_UPDATE
             | WM_APP_TRAY
             | WM_APP_DRIFT_CHOICE
+            | WM_APP_PILL_CLICK
     ) || (m != 0 && [r.reload, r.show, r.toggle, r.pause, r.taskbar].contains(&m))
 }
 

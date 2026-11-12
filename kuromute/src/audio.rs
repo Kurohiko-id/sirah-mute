@@ -233,7 +233,6 @@ impl Audio {
     }
 
     /// Sets mute on the main watched device.
-    #[allow(dead_code)] // consumed by the cough-hold task
     pub fn set_mute(&self, muted: bool) -> Result<()> {
         let Some((vol, _)) = &self.volume else {
             return Err(windows::Win32::Foundation::E_POINTER.into());
