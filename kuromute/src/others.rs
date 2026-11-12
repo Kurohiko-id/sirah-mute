@@ -215,15 +215,7 @@ impl OtherPills {
             .iter()
             .map(|p| Ok(pill_width(r, f, p, hf)?.ceil() as i32))
             .collect::<Result<Vec<i32>>>()?;
-        let rects = pill_row(
-            &widths,
-            gap,
-            pill_h,
-            win.work,
-            margin,
-            self.pos,
-            win.main,
-        );
+        let rects = pill_row(&widths, gap, pill_h, win.work, margin, self.pos, win.main);
         // Pills past the work-area edge are dropped (rects is a prefix of pills).
         let (Some(&first), Some(&last)) = (rects.first(), rects.last()) else {
             set_rects(win.hwnd, Vec::new());

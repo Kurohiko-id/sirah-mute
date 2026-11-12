@@ -289,7 +289,8 @@ fn keep_size_across_dpi(w: &MainWindow) {
                         .to_physical::<u32>(ww.scale_factor());
                     let have = ww.inner_size();
                     // 1 px slack for rounding, so a correct window never re-triggers itself.
-                    if have.width.abs_diff(want.width) > 1 || have.height.abs_diff(want.height) > 1 {
+                    if have.width.abs_diff(want.width) > 1 || have.height.abs_diff(want.height) > 1
+                    {
                         crate::log!("settings: size {have:?} -> {want:?} after DPI change");
                         let _ = ww.request_inner_size(want);
                     }

@@ -450,7 +450,9 @@ mod tests {
             };
             let f = features(&c);
             assert!(f.len() > 10, "{f:?}");
-            assert!(f.contains(&"f_other_mics".to_string()) && f.contains(&"f_cough_hold".to_string()));
+            assert!(
+                f.contains(&"f_other_mics".to_string()) && f.contains(&"f_cough_hold".to_string())
+            );
             for e in &f {
                 assert!(e.starts_with("f_") && valid_ev(e), "bad event name {e}");
                 assert!(

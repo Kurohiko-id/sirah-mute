@@ -221,14 +221,21 @@ mod tests {
         // 1000 wide, margin 24 -> 952 usable: 400 + 8 + 400 fits, a third does not
         let work = r(0, 0, 1000, 800);
         let row = |pos| pill_row(&[400, 400, 400], 8, 40, work, 24, pos, None);
-        for pos in [Position::BottomLeft, Position::TopCenter, Position::BottomRight] {
+        for pos in [
+            Position::BottomLeft,
+            Position::TopCenter,
+            Position::BottomRight,
+        ] {
             let rects = row(pos);
             assert_eq!(rects.len(), 2, "{pos:?}");
             assert!(rects[0].left >= 24 && rects[1].right <= 976, "{pos:?}");
         }
         assert_eq!(row(Position::BottomRight)[1].right, 976);
         // shown pills keep their indices: a prefix, never a neighbour
-        assert_eq!(row(Position::BottomLeft)[0].right - row(Position::BottomLeft)[0].left, 400);
+        assert_eq!(
+            row(Position::BottomLeft)[0].right - row(Position::BottomLeft)[0].left,
+            400
+        );
         // nothing fits -> empty
         assert!(pill_row(&[2000], 8, 40, work, 24, Position::BottomLeft, None).is_empty());
     }

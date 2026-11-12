@@ -371,7 +371,9 @@ pub fn t(l: ResolvedLang, k: Key) -> &'static str {
         (CoughHold, En) => "Hold to cough",
         (CoughHold, Id) => "Tahan untuk batuk",
         (CoughNote, En) => "Hold the key = muted while held. Short press = normal mute/unmute.",
-        (CoughNote, Id) => "Tahan tombol = mute selama ditahan. Tekan sebentar = mute/unmute biasa.",
+        (CoughNote, Id) => {
+            "Tahan tombol = mute selama ditahan. Tekan sebentar = mute/unmute biasa."
+        }
         (TalkWarnNote, En) => {
             "Pick your real mic, not the one you mute. Works only while another app (e.g. Wave Link) is using that mic."
         }
@@ -402,8 +404,12 @@ pub fn t(l: ResolvedLang, k: Key) -> &'static str {
         (PopupScale, Id) => "Ukuran",
         (PopupPersist, En) => "Keep popup while muted",
         (PopupPersist, Id) => "Popup tetap tampil saat mute",
-        (PillClickHint, En) => "Turn on \u{201C}Keep popup while muted\u{201D} so the pill stays clickable.",
-        (PillClickHint, Id) => "Nyalain \u{201C}Popup tetap tampil saat mute\u{201D} biar pill bisa diklik kapan aja.",
+        (PillClickHint, En) => {
+            "Turn on \u{201C}Keep popup while muted\u{201D} so the pill stays clickable."
+        }
+        (PillClickHint, Id) => {
+            "Nyalain \u{201C}Popup tetap tampil saat mute\u{201D} biar pill bisa diklik kapan aja."
+        }
         (SecBorder, En) => "SCREEN BORDER",
         (SecBorder, Id) => "BINGKAI LAYAR",
         (BorderEnabled, En) => "Show border",

@@ -237,7 +237,9 @@ fn setup_mics(w: &MainWindow, state: &Rc<RefCell<State>>, sink: HWND) -> Rc<dyn 
         let s = state.borrow();
         w.set_cough_enabled(s.cfg.cough_hold);
         w.set_cough_ms(s.cfg.cough_hold_ms as f32);
-        w.set_cough_secs(cough_secs_text(s.cfg.cough_hold_ms, i18n::resolve(s.cfg.language)).into());
+        w.set_cough_secs(
+            cough_secs_text(s.cfg.cough_hold_ms, i18n::resolve(s.cfg.language)).into(),
+        );
     }
     refresh
 }

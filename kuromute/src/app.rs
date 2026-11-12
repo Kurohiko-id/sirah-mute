@@ -30,12 +30,12 @@ use windows::Win32::System::Threading::{
 };
 use windows::Win32::UI::Shell::{NIN_BALLOONUSERCLICK, NIN_SELECT, ShellExecuteW};
 use windows::Win32::UI::WindowsAndMessaging::{
-    CreateWindowExW, DefWindowProcW, DispatchMessageW, FindWindowW, GetMessageW, KillTimer, MSG, SMTO_ABORTIFHUNG, SendMessageTimeoutW,
+    CreateWindowExW, DefWindowProcW, DispatchMessageW, FindWindowW, GetMessageW, KillTimer, MSG,
     PBT_APMRESUMEAUTOMATIC, PostMessageW, PostQuitMessage, RegisterClassExW,
-    RegisterWindowMessageW, SPI_SETWORKAREA, SW_SHOWNORMAL, SetTimer, TranslateMessage,
-    WINDOW_EX_STYLE, WM_CLOSE, WM_CONTEXTMENU, WM_DISPLAYCHANGE, WM_DPICHANGED, WM_ENDSESSION,
-    WM_HOTKEY, WM_LBUTTONUP, WM_POWERBROADCAST, WM_SETTINGCHANGE, WM_TIMER, WNDCLASSEXW,
-    WS_OVERLAPPED,
+    RegisterWindowMessageW, SMTO_ABORTIFHUNG, SPI_SETWORKAREA, SW_SHOWNORMAL, SendMessageTimeoutW,
+    SetTimer, TranslateMessage, WINDOW_EX_STYLE, WM_CLOSE, WM_CONTEXTMENU, WM_DISPLAYCHANGE,
+    WM_DPICHANGED, WM_ENDSESSION, WM_HOTKEY, WM_LBUTTONUP, WM_POWERBROADCAST, WM_SETTINGCHANGE,
+    WM_TIMER, WNDCLASSEXW, WS_OVERLAPPED,
 };
 use windows::core::{HSTRING, PCWSTR, w};
 
@@ -255,19 +255,21 @@ pub fn status_word(reply: Option<isize>) -> (&'static str, i32) {
 /// returns the exit code.
 pub fn remote(action: usize) -> i32 {
     let reply = unsafe {
-        FindWindowW(WINDOW_CLASS, PCWSTR::null()).ok().and_then(|h| {
-            let mut res = 0usize;
-            let r = SendMessageTimeoutW(
-                h,
-                RegisterWindowMessageW(MSG_REMOTE),
-                WPARAM(action),
-                LPARAM(0),
-                SMTO_ABORTIFHUNG,
-                2000,
-                Some(&mut res),
-            );
-            (r.0 != 0).then_some(res as isize)
-        })
+        FindWindowW(WINDOW_CLASS, PCWSTR::null())
+            .ok()
+            .and_then(|h| {
+                let mut res = 0usize;
+                let r = SendMessageTimeoutW(
+                    h,
+                    RegisterWindowMessageW(MSG_REMOTE),
+                    WPARAM(action),
+                    LPARAM(0),
+                    SMTO_ABORTIFHUNG,
+                    2000,
+                    Some(&mut res),
+                );
+                (r.0 != 0).then_some(res as isize)
+            })
     };
     let (word, code) = status_word(reply);
     crate::print_stdout(word);
@@ -659,7 +661,11 @@ impl State {
         };
         // "Now" = the first role that isn't the pick (drift can be in one role only).
         let now = |roles: &[Option<String>; 3], pick: &Option<String>| {
-            roles.iter().flatten().find(|r| Some(*r) != pick.as_ref()).cloned()
+            roles
+                .iter()
+                .flatten()
+                .find(|r| Some(*r) != pick.as_ref())
+                .cloned()
         };
         let mut rows = Vec::new();
         if input {
@@ -1342,9 +1348,15 @@ mod tests {
     #[test]
     fn drift_asks_once_per_episode() {
         assert_eq!(drift_after_check(Drift::Clear, true), (Drift::Asking, true));
-        assert_eq!(drift_after_check(Drift::Asking, true), (Drift::Asking, false));
+        assert_eq!(
+            drift_after_check(Drift::Asking, true),
+            (Drift::Asking, false)
+        );
         assert_eq!(drift_after_check(Drift::Kept, true), (Drift::Kept, false));
-        assert_eq!(drift_after_check(Drift::Snoozed, true), (Drift::Snoozed, false));
+        assert_eq!(
+            drift_after_check(Drift::Snoozed, true),
+            (Drift::Snoozed, false)
+        );
         // Defaults match again (or guard off / AutoRevert): episode over, next drift asks again.
         for d in [Drift::Asking, Drift::Kept, Drift::Snoozed] {
             assert_eq!(drift_after_check(d, false), (Drift::Clear, false));

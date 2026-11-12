@@ -25,8 +25,8 @@ mod update;
 
 use std::io::Write;
 use windows::Win32::Foundation::HWND;
-use windows::Win32::System::Com::{COINIT_APARTMENTTHREADED, CoInitializeEx};
 use windows::Win32::Storage::FileSystem::WriteFile;
+use windows::Win32::System::Com::{COINIT_APARTMENTTHREADED, CoInitializeEx};
 use windows::Win32::System::Console::{
     ATTACH_PARENT_PROCESS, AttachConsole, GetStdHandle, STD_OUTPUT_HANDLE,
 };
@@ -48,8 +48,10 @@ fn print_stdout(word: &str) {
             .ok()
             .filter(|h| !h.is_invalid() && !h.0.is_null())
             .is_some_and(|h| {
-                let line = format!("{word}
-");
+                let line = format!(
+                    "{word}
+"
+                );
                 let mut n = 0u32;
                 WriteFile(h, Some(line.as_bytes()), Some(&mut n), None).is_ok()
             });

@@ -61,10 +61,7 @@ pub fn setup(w: &MainWindow, state: &Rc<RefCell<State>>, sink: HWND) -> Rc<dyn F
                         "" => "Mic",
                         n => n,
                     };
-                    names.push(format!(
-                        "{name} {}",
-                        i18n::t(lang, Key::MicNotConnected)
-                    ));
+                    names.push(format!("{name} {}", i18n::t(lang, Key::MicNotConnected)));
                     ids.push(m.id.clone());
                 }
             }

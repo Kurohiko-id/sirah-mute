@@ -254,7 +254,8 @@ mod tests {
     use std::fs;
 
     fn tmp(name: &str) -> PathBuf {
-        let d = std::env::temp_dir().join(format!("sirahmute-test-{}-{}", name, std::process::id()));
+        let d =
+            std::env::temp_dir().join(format!("sirahmute-test-{}-{}", name, std::process::id()));
         let _ = fs::remove_dir_all(&d);
         fs::create_dir_all(&d).unwrap();
         d
@@ -311,7 +312,10 @@ mod tests {
         assert!(adopt_legacy(&old, &new));
         fs::write(new.join("config.json"), "{\"v\":1}").unwrap();
         assert!(!adopt_legacy(&old, &new)); // never overwrites
-        assert_eq!(fs::read_to_string(new.join("config.json")).unwrap(), "{\"v\":1}");
+        assert_eq!(
+            fs::read_to_string(new.join("config.json")).unwrap(),
+            "{\"v\":1}"
+        );
         let _ = fs::remove_dir_all(&base);
     }
 
@@ -463,6 +467,10 @@ mod tests {
         let got: Vec<&str> = c.other_mics.iter().map(|m| m.id.as_str()).collect();
         assert_eq!(got, ["a", "b", "c", "d", "e", "f"]);
         assert!(c.other_mics.len() <= MAX_OTHER_MICS);
-        assert!(c.other_mics.iter().all(|m| m.name.chars().count() <= OTHER_NAME_MAX));
+        assert!(
+            c.other_mics
+                .iter()
+                .all(|m| m.name.chars().count() <= OTHER_NAME_MAX)
+        );
     }
 }
