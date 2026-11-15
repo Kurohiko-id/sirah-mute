@@ -621,6 +621,55 @@ mod tests {
         assert_eq!(strip_dirs(&"a".repeat(30_000)).len(), 20_000);
     }
 
+    /// The table from the Kuro Stats brief (client test.mjs), verbatim.
+    #[test]
+    fn strip_dirs_brief_table() {
+        let same = |s: &'static str| (s, s);
+        for (inp, want) in [
+            (
+                "at f (file:///C:/Users/Budi%20Santoso/AppData/Local/Programs/waku/resources/app.asar/main.js:202:3)",
+                "at f (main.js:202:3)",
+            ),
+            (
+                r"at g (C:\Users\Budi Santoso\app\x.js:10:5)",
+                "at g (x.js:10:5)",
+            ),
+            (
+                r"open 'D:\Rahasia\Kerja\presets.json'",
+                "open 'presets.json'",
+            ),
+            (r"at \\nas\share\lib\y.js:1:1", "at y.js:1:1"),
+            ("at /home/budi/app/main.js:3:4", "at main.js:3:4"),
+            (r"open 'C:\Users\D'Angelo Putra\x.json'", "open 'x.json'"),
+            (
+                "at a (file:///C:/Users/Budi%20(Kerja)/app.asar/electron/main.js:9:1)",
+                "at a (main.js:9:1)",
+            ),
+            (
+                r"at b (C:\Program Files (x86)\KOS Deck\x.js:1:1)",
+                "at b (x.js:1:1)",
+            ),
+            (
+                r"upload 3/10 gagal di C:\Users\Budi\x.mp4",
+                "upload 3/10 gagal di x.mp4",
+            ),
+            same("frame 1/2 gagal"),
+            same("read/write error"),
+            same("at node:internal/process/task_queues:95:5"),
+            same("TypeError: Cannot read properties of undefined (reading 'scene')"),
+        ] {
+            assert_eq!(strip_dirs(inp), want, "input: {inp}");
+        }
+        let big = "a/".repeat(5_000_000);
+        let t0 = std::time::Instant::now();
+        strip_dirs(&big);
+        assert!(
+            t0.elapsed() < Duration::from_millis(500),
+            "{:?}",
+            t0.elapsed()
+        );
+    }
+
     #[test]
     fn usage_buckets() {
         let ev = |m, s| usage_events(m, s).to_vec();
