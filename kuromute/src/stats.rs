@@ -368,15 +368,83 @@ pub fn features(c: &Config) -> Vec<String> {
     f
 }
 
-fn scrub(s: &str, home: &str, user: &str) -> String {
-    let mut s = s.to_string();
-    if !home.is_empty() {
-        s = s.replace(home, "~");
+/// Port of `stripDirs` from Kuro Stats client 744a09f (no regex lookbehind in Rust, so hand-scanned):
+/// `/(?:\b[a-z][\w+.-]{0,30}:\/{0,3}(?:[a-z]:)?|\b[a-z]:|(?<![\w.-]))(?:[\\/][^\\/\n"<>|?*:]*)*[\\/]/gi`
+/// Drops every folder, keeps file name + line (`main.rs:9:1`); `frame 1/2`, `read/write` stay intact.
+pub fn strip_dirs(s: &str) -> String {
+    let v: Vec<char> = s.chars().take(20_000).collect();
+    let n = v.len();
+    let w = |c: char| c.is_ascii_alphanumeric() || c == '_';
+    let sep = |i: usize| i < n && (v[i] == '\\' || v[i] == '/');
+    // Body: separator, then a run free of \n"<>|?*: ; ends after its last separator.
+    let body = |j: usize| -> Option<usize> {
+        if !sep(j) {
+            return None;
+        }
+        let mut last = None;
+        let mut k = j;
+        while k < n && !"\n\"<>|?*:".contains(v[k]) {
+            if sep(k) {
+                last = Some(k + 1);
+            }
+            k += 1;
+        }
+        last
+    };
+    let drive = |i: usize| i + 1 < n && v[i].is_ascii_alphabetic() && v[i + 1] == ':';
+    let mut out = String::with_capacity(n);
+    let mut i = 0;
+    while i < n {
+        let boundary = v[i].is_ascii_alphabetic() && (i == 0 || !w(v[i - 1]));
+        let scheme = || {
+            if !boundary {
+                return None;
+            }
+            let mut k = i + 1;
+            while k < n && k - i - 1 < 30 && (w(v[k]) || "+.-".contains(v[k])) {
+                k += 1;
+            }
+            if k >= n || v[k] != ':' {
+                return None;
+            }
+            k += 1;
+            let slashes = (0..3).take_while(|d| k + d < n && v[k + d] == '/').count();
+            (0..=slashes).rev().find_map(|s| {
+                let p = k + s;
+                (if drive(p) { body(p + 2) } else { None }).or_else(|| body(p))
+            })
+        };
+        let end = scheme()
+            .or_else(|| {
+                if boundary && drive(i) {
+                    body(i + 2)
+                } else {
+                    None
+                }
+            })
+            .or_else(|| {
+                let free = i == 0 || !(w(v[i - 1]) || v[i - 1] == '.' || v[i - 1] == '-');
+                if free { body(i) } else { None }
+            });
+        match end {
+            Some(e) => i = e,
+            None => {
+                out.push(v[i]);
+                i += 1;
+            }
+        }
     }
-    if !user.is_empty() {
-        s = s.replace(user, "<user>");
+    out
+}
+
+/// Same as the Node client: strip folders, then mask the account name.
+fn scrub(s: &str, user: &str) -> String {
+    let s = strip_dirs(s);
+    if user.is_empty() {
+        s
+    } else {
+        s.replace(user, "<user>")
     }
-    s
 }
 
 /// Panic report: message + source location, user folder masked, same message once, max 10 per session.
@@ -394,10 +462,17 @@ pub fn install_panic_hook() {
             .or_else(|| p.downcast_ref::<String>().cloned())
             .unwrap_or_else(|| "panic".into());
         let at = info.location().map(|l| l.to_string()).unwrap_or_default();
-        let home = std::env::var("USERPROFILE").unwrap_or_default();
         let user = std::env::var("USERNAME").unwrap_or_default();
-        let msg: String = scrub(&msg, &home, &user).chars().take(300).collect();
-        let stack: String = scrub(&at, &home, &user).chars().take(600).collect();
+        let msg = scrub(&msg, &user);
+        let msg: String = if msg.trim().is_empty() {
+            "Error".into()
+        } else {
+            msg
+        }
+        .chars()
+        .take(300)
+        .collect();
+        let stack: String = scrub(&at, &user).chars().take(600).collect();
         {
             let Ok(mut seen) = ERRORS.lock() else { return };
             let key: String = msg.chars().take(100).collect();
@@ -506,13 +581,44 @@ mod tests {
     }
 
     #[test]
-    fn scrub_masks_home_then_user() {
-        let s = scrub(
-            r"panicked at C:\Users\kaito\src\a.rs (kaito)",
-            r"C:\Users\kaito",
-            "kaito",
+    fn scrub_strips_dirs_then_user() {
+        assert_eq!(
+            scrub(r"panicked at C:\Users\kaito\src\a.rs:3:1 (kaito)", "kaito"),
+            "panicked at a.rs:3:1 (<user>)"
         );
-        assert_eq!(s, r"panicked at ~\src\a.rs (<user>)");
+    }
+
+    /// Same cases as the Kuro Stats client (744a09f) tests.
+    #[test]
+    fn strip_dirs_matches_node_client() {
+        for (inp, want) in [
+            (
+                "file:///C:/Users/Budi%20(Kerja)/app.asar/electron/main.js:9:1",
+                "main.js:9:1",
+            ),
+            (
+                r"at C:\Users\D'Angelo Putra\x\main.js:2:3",
+                "at main.js:2:3",
+            ),
+            (r"C:\Program Files (x86)\Sirah\a.rs:1:1", "a.rs:1:1"),
+            (
+                r"open D:\Rekaman\Budi\log.txt failed",
+                "open log.txt failed",
+            ),
+            (r"\\nas\share\Budi\cfg.json", "cfg.json"),
+            ("/home/budi/app/x.js:4:2", "x.js:4:2"),
+            ("src/stats.rs:12:5", "src/stats.rs:12:5"),
+            (r"~\src\stats.rs:12:5", "~stats.rs:12:5"),
+            ("frame 1/2 read/write", "frame 1/2 read/write"),
+            (
+                "at node:internal/modules/cjs:1:1",
+                "at node:internal/modules/cjs:1:1",
+            ),
+            ("", ""),
+        ] {
+            assert_eq!(strip_dirs(inp), want, "input: {inp}");
+        }
+        assert_eq!(strip_dirs(&"a".repeat(30_000)).len(), 20_000);
     }
 
     #[test]
