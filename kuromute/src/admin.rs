@@ -109,8 +109,21 @@ pub fn task_xml(exe: &Path, user_id: &str, logon: bool) -> String {
     )
 }
 
-fn user_name() -> String {
-    std::env::var("USERNAME").unwrap_or_default()
+fn user_name() -> Result<String, String> {
+    match std::env::var("USERNAME") {
+        Ok(u) if !u.is_empty() => Ok(u),
+        _ => Err("USERNAME not set".into()),
+    }
+}
+
+/// `DOMAIN\user`, falling back to COMPUTERNAME, then the bare user name.
+fn user_id(domain: &str, computer: &str, user: &str) -> String {
+    let d = if domain.is_empty() { computer } else { domain };
+    if d.is_empty() {
+        user.to_string()
+    } else {
+        format!("{d}\\{user}")
+    }
 }
 
 fn schtasks(args: &[&str]) -> Result<(), String> {
@@ -131,18 +144,37 @@ fn schtasks(args: &[&str]) -> Result<(), String> {
 
 pub fn create_task(logon: bool) -> Result<(), String> {
     let exe = std::env::current_exe().map_err(|e| e.to_string())?;
-    let user = user_name();
-    let domain = std::env::var("USERDOMAIN").unwrap_or_default();
-    let xml = task_xml(&exe, &format!("{domain}\\{user}"), logon);
+    if !in_program_files(&exe, &program_files_dirs()) {
+        return Err("exe is not under Program Files".into());
+    }
+    let user = user_name()?;
+    let env = |k| std::env::var(k).unwrap_or_default();
+    let xml = task_xml(
+        &exe,
+        &user_id(&env("USERDOMAIN"), &env("COMPUTERNAME"), &user),
+        logon,
+    );
     let mut bytes = vec![0xFF, 0xFE];
     bytes.extend(xml.encode_utf16().flat_map(u16::to_le_bytes));
-    let file = std::env::temp_dir().join(format!("sirahmute-task-{}.xml", std::process::id()));
-    std::fs::write(&file, bytes).map_err(|e| e.to_string())?;
-    let name = task_name(&user);
+    // Admin-only-writable dir (Program Files), so an unelevated process cannot swap the XML.
+    let dir = exe.parent().ok_or("exe has no parent dir")?;
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_nanos());
+    let file = dir.join(format!("task-{}-{nanos}.xml", std::process::id()));
+    {
+        use std::io::Write;
+        let mut f = std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&file)
+            .map_err(|e| e.to_string())?;
+        f.write_all(&bytes).map_err(|e| e.to_string())?;
+    }
     let r = schtasks(&[
         "/Create",
         "/TN",
-        &name,
+        &task_name(&user),
         "/XML",
         &file.to_string_lossy(),
         "/F",
@@ -152,14 +184,16 @@ pub fn create_task(logon: bool) -> Result<(), String> {
 }
 
 pub fn delete_task() -> Result<(), String> {
-    match schtasks(&["/Delete", "/TN", &task_name(&user_name()), "/F"]) {
-        Err(e) if !e.to_lowercase().contains("cannot find") => Err(e),
-        _ => Ok(()),
+    let name = task_name(&user_name()?);
+    // Exit codes only: schtasks text is localized. Query fails = task absent.
+    if schtasks(&["/Query", "/TN", &name]).is_err() {
+        return Ok(());
     }
+    schtasks(&["/Delete", "/TN", &name, "/F"])
 }
 
 pub fn run_task() -> Result<(), String> {
-    schtasks(&["/Run", "/TN", &task_name(&user_name())])
+    schtasks(&["/Run", "/TN", &task_name(&user_name()?)])
 }
 
 /// Hands `target` to the already-running unelevated shell via explorer.
@@ -237,6 +271,13 @@ mod tests {
             assert!(x.contains(want), "missing {want}");
         }
         assert!(!task_xml(Path::new(r"C:\x.exe"), "u", false).contains("<LogonTrigger>"));
+    }
+
+    #[test]
+    fn user_id_fallbacks() {
+        assert_eq!(user_id("PC", "X", "Budi"), r"PC\Budi");
+        assert_eq!(user_id("", "X", "Budi"), r"X\Budi");
+        assert_eq!(user_id("", "", "Budi"), "Budi");
     }
 
     #[test]
