@@ -35,13 +35,19 @@ I'm Kurohiko. I've had a cough for years, so on stream I hit mute a lot. The pro
 
 ## Install
 
-Download **SirahMute-Setup.exe** (per-user installer, no admin) or the portable zip from [Releases](../../releases/latest).
+Download **SirahMute-Setup.exe** (per-user by default, no admin needed; it also offers "Install for all users") or the portable zip from [Releases](../../releases/latest).
 
 > **Windows SmartScreen:** releases aren't code-signed yet, so Windows may say "Windows protected your PC". Click **More info → Run anyway**.
 
 ### Coming from Kuro Mute & Force Mic?
 
 Sirah Mute is the new version of Kuro Mute. It picks up your old settings automatically on first start and replaces the old app's autostart entry. You can uninstall Kuro Mute afterwards.
+
+### Hotkey not working in games or OBS?
+
+Windows doesn't let normal apps see your keys while an app running as administrator is focused (OBS as admin, some games, Task Manager). To fix it, turn on **Settings → General → Run as administrator**. It asks for permission once when you turn it on, and there is no prompt at sign-in.
+
+It needs the installer's **Install for all users** option (Program Files). If you installed per-user, run the installer again and pick it. Your settings are kept and the per-user copy is removed.
 
 ## Home Assistant (HASS Agent)
 
@@ -98,7 +104,7 @@ All of this is **fully anonymous**. I don't know who installed Sirah Mute, and I
 - A random ID created the first time Sirah Mute opens. It isn't linked to your accounts, your name, or your device.
 - Sirah Mute version, Windows version, CPU architecture (x64/arm64), and system language.
 - Country, estimated from the connection. IP addresses are not stored.
-- Names of the settings that are switched on, such as border Glow/Solid, popup Pill/Card, its corner and whether it stays up while muted, talk-while-muted warning, hold to cough (`cough_hold`), other mics (`other_mics`), beep, default-device guard, start with Windows, and whether you changed the hotkey. Each one is counted at most once a day, so there is no per-click record.
+- Names of the settings that are switched on, such as border Glow/Solid, popup Pill/Card, its corner and whether it stays up while muted, talk-while-muted warning, hold to cough (`cough_hold`), other mics (`other_mics`), beep, default-device guard, start with Windows, run as administrator (`run_as_admin`), and whether you changed the hotkey. Each one is counted at most once a day, so there is no per-click record.
 - How much you muted each day, as rough ranges only: how many times (1–5, 6–20, 21–50, more than 50) and for how long in total (under 5 minutes, 5–30 minutes, 30 minutes–2 hours, longer). Not the exact times or lengths of each mute.
 - Crash messages when something goes wrong, with your user folder name masked.
 

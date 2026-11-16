@@ -35,13 +35,19 @@ Gw Kurohiko. Gw udah batuk bertahun-tahun, jadi pas stream gw sering banget penc
 
 ## Install
 
-Unduh **SirahMute-Setup.exe** (installer per-user, tanpa admin) atau zip portable dari [Releases](../../releases/latest).
+Unduh **SirahMute-Setup.exe** (per-user secara default, tidak perlu admin; ada juga opsi "Install for all users") atau zip portable dari [Releases](../../releases/latest).
 
 > **Windows SmartScreen:** rilis belum di-code-sign, jadi Windows bisa nampilin "Windows protected your PC". Klik **More info → Run anyway**.
 
 ### Pindahan dari Kuro Mute & Force Mic?
 
 Sirah Mute adalah versi baru Kuro Mute. Settingan lama otomatis kebawa waktu pertama jalan, dan entri autostart app lama diganti. Setelah itu Kuro Mute boleh di-uninstall.
+
+### Hotkey tidak jalan di game atau OBS?
+
+Windows tidak membolehkan aplikasi biasa melihat tombol kalian saat aplikasi yang berjalan sebagai administrator sedang aktif (OBS sebagai admin, beberapa game, Task Manager). Solusinya, nyalakan **Settings → General → Run as administrator**. Izinnya diminta sekali saat dinyalakan, dan tidak ada prompt saat sign-in.
+
+Ini butuh opsi **Install for all users** di installer (Program Files). Kalau sebelumnya install per-user, jalankan installer lagi dan pilih opsi itu. Pengaturan tetap aman dan salinan per-user dihapus.
 
 ## Home Assistant (HASS Agent)
 
@@ -98,7 +104,7 @@ Semua data ini **sepenuhnya anonim**. Aku tidak tahu siapa yang menginstal Sirah
 - ID acak yang dibuat saat Sirah Mute pertama kali dibuka. ID ini tidak terhubung ke akun, nama, atau perangkat kalian.
 - Versi Sirah Mute, versi Windows, arsitektur CPU (x64/arm64), dan bahasa sistem.
 - Negara, diperkirakan dari koneksi. Alamat IP tidak disimpan.
-- Nama pengaturan yang sedang aktif, misalnya border Glow/Solid, popup Pill/Card beserta posisinya dan apakah tetap tampil selama mute, peringatan bicara saat mute, tahan buat batuk (`cough_hold`), mic lain (`other_mics`), beep, penjaga perangkat default, jalan saat Windows start, dan apakah hotkey diganti. Tiap pengaturan dihitung paling banyak sekali sehari, jadi tidak ada catatan per klik.
+- Nama pengaturan yang sedang aktif, misalnya border Glow/Solid, popup Pill/Card beserta posisinya dan apakah tetap tampil selama mute, peringatan bicara saat mute, tahan buat batuk (`cough_hold`), mic lain (`other_mics`), beep, penjaga perangkat default, jalan saat Windows start, jalan sebagai administrator (`run_as_admin`), dan apakah hotkey diganti. Tiap pengaturan dihitung paling banyak sekali sehari, jadi tidak ada catatan per klik.
 - Seberapa sering kalian mute tiap hari, hanya dalam rentang kasar: berapa kali (1–5, 6–20, 21–50, lebih dari 50) dan total lamanya (di bawah 5 menit, 5–30 menit, 30 menit–2 jam, lebih lama). Waktu dan lama tiap mute tidak dikirim.
 - Pesan crash kalau Sirah Mute mengalami masalah. Nama folder pengguna di dalamnya disamarkan.
 
