@@ -129,6 +129,14 @@ pub enum Key {
     UpdCurrent,
     UpdFailed,
     OpenRelease,
+    UpdWhatsNew,
+    UpdChip,
+    UpdTitle,
+    UpdLater,
+    UpdInstall,
+    UpdDownloading,
+    UpdInstalling,
+    UpdInstallFailed,
     LogsLabel,
     LogsBtn,
     BugLabel,
@@ -153,7 +161,7 @@ pub enum Key {
 
 impl Key {
     #[cfg(test)]
-    pub const ALL: [Key; 124] = [
+    pub const ALL: [Key; 132] = [
         Key::Muted,
         Key::Unmuted,
         Key::MicDisconnected,
@@ -258,6 +266,14 @@ impl Key {
         Key::UpdCurrent,
         Key::UpdFailed,
         Key::OpenRelease,
+        Key::UpdWhatsNew,
+        Key::UpdChip,
+        Key::UpdTitle,
+        Key::UpdLater,
+        Key::UpdInstall,
+        Key::UpdDownloading,
+        Key::UpdInstalling,
+        Key::UpdInstallFailed,
         Key::LogsLabel,
         Key::LogsBtn,
         Key::BugLabel,
@@ -522,6 +538,24 @@ pub fn t(l: ResolvedLang, k: Key) -> &'static str {
         (UpdFailed, Id) => "Gagal ngecek update",
         (OpenRelease, En) => "Open release page",
         (OpenRelease, Id) => "Buka halaman rilis",
+        (UpdWhatsNew, En) => "What's new",
+        (UpdWhatsNew, Id) => "Yang baru",
+        (UpdTitle, En) => "Update available",
+        (UpdTitle, Id) => "Ada update",
+        (UpdLater, En) => "Later",
+        (UpdLater, Id) => "Nanti",
+        (UpdInstall, En) => "Update now",
+        (UpdInstall, Id) => "Update sekarang",
+        (UpdDownloading, En) => "Downloading {done} / {total} MB",
+        (UpdDownloading, Id) => "Lagi download {done} / {total} MB",
+        (UpdInstalling, En) => "Installing... Sirah Mute closes and starts again when it's done.",
+        (UpdInstalling, Id) => {
+            "Lagi install... Sirah Mute ditutup lalu jalan lagi setelah selesai."
+        }
+        (UpdInstallFailed, En) => "Could not download the update. Use the release page instead.",
+        (UpdInstallFailed, Id) => "Gagal download update. Pakai halaman rilis aja.",
+        (UpdChip, En) => "Update {tag}",
+        (UpdChip, Id) => "Update {tag}",
         (LogsLabel, En) => "Log folder",
         (LogsLabel, Id) => "Folder log",
         (LogsBtn, En) => "Open log folder",

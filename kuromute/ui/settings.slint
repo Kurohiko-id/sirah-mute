@@ -1,4 +1,4 @@
-import { Button, CheckBox, ComboBox, LineEdit, ScrollView, Slider, Palette as StdPalette } from "std-widgets.slint";
+import { Button, CheckBox, ComboBox, LineEdit, ProgressIndicator, ScrollView, Slider, Palette as StdPalette } from "std-widgets.slint";
 
 export global Palette {
     out property <color> window-bg: #202020;
@@ -239,6 +239,24 @@ export component MainWindow inherits Window {
     in property <string> upd-url;
     in property <bool> upd-link;
     in property <bool> upd-busy;
+    in property <string> upd-chip;
+    in property <string> upd-tag;
+    in property <string> upd-title;
+    in property <string> upd-whats-new;
+    in property <string> upd-later;
+    in property <[string]> upd-highlights;
+    // In-app update: download the setup exe and run it (installed copies only, not portable).
+    in property <bool> upd-can-install;
+    in property <string> upd-install;
+    in property <bool> upd-installing;
+    in property <string> upd-install-error;
+    in property <string> upd-asset-url;
+    in property <string> upd-asset-sha;
+    in property <int> upd-asset-size;
+    in property <float> upd-progress; // 0..1
+    in property <string> upd-progress-text;
+    callback install-update-clicked();
+    public function show-update() { upd-popup.show(); }
     callback gen-changed();
     callback check-update-clicked();
     callback open-release-clicked();
@@ -259,6 +277,71 @@ export component MainWindow inherits Window {
     background: Palette.window-bg;
     default-font-size: 14px;
 
+    upd-popup := PopupWindow {
+        x: (root.width - 420px) / 2;
+        y: 90px;
+        width: 420px;
+        close-policy: close-on-click-outside;
+        Rectangle {
+            background: Palette.card-bg;
+            border-radius: 10px;
+            border-width: 1px;
+            border-color: #3a3a3a;
+            drop-shadow-blur: 24px;
+            drop-shadow-color: #00000099;
+            VerticalLayout {
+                padding: 24px;
+                spacing: 10px;
+                Text { text: root.upd-title; color: Palette.accent; font-size: 12px; font-weight: 600; }
+                Text { text: "Sirah Mute " + root.upd-tag; color: Palette.text; font-size: 22px; font-weight: 700; }
+                if root.upd-highlights.length > 0: Text {
+                    text: root.upd-whats-new;
+                    color: Palette.text-dim;
+                    font-size: 12px;
+                    font-weight: 600;
+                }
+                for h in root.upd-highlights: HorizontalLayout {
+                    spacing: 10px;
+                    VerticalLayout {
+                        alignment: start;
+                        padding-top: 7px;
+                        Rectangle { width: 6px; height: 6px; border-radius: 3px; background: Palette.accent; }
+                    }
+                    Text { text: h; color: Palette.text; wrap: word-wrap; horizontal-stretch: 1; }
+                }
+                if root.upd-installing: VerticalLayout {
+                    spacing: 6px;
+                    padding-top: 6px;
+                    ProgressIndicator { height: 6px; progress: root.upd-progress; }
+                    Text { text: root.upd-progress-text; color: Palette.text-dim; font-size: 12px; }
+                }
+                if root.upd-install-error != "": Text {
+                    text: root.upd-install-error;
+                    color: #ff6b6b;
+                    font-size: 12px;
+                    wrap: word-wrap;
+                }
+                HorizontalLayout {
+                    alignment: end;
+                    spacing: 8px;
+                    padding-top: 10px;
+                    Button { text: root.upd-later; enabled: !root.upd-installing; clicked => { upd-popup.close(); } }
+                    Button {
+                        text: Strings.open-release;
+                        primary: !root.upd-can-install;
+                        clicked => { root.open-release-clicked(); upd-popup.close(); }
+                    }
+                    if root.upd-can-install: Button {
+                        text: root.upd-install;
+                        primary: true;
+                        enabled: !root.upd-installing;
+                        clicked => { root.install-update-clicked(); }
+                    }
+                }
+            }
+        }
+    }
+
     HorizontalLayout {
         Rectangle {
             width: 180px;
@@ -272,6 +355,21 @@ export component MainWindow inherits Window {
                 SideItem { label: Strings.tab-indicator; active: root.tab == 2; clicked => { root.tab = 2; } }
                 SideItem { label: Strings.tab-device; active: root.tab == 3; clicked => { root.tab = 3; } }
                 SideItem { label: Strings.tab-general; active: root.tab == 4; clicked => { root.tab = 4; } }
+                // New version: points to the Updates section in the General tab.
+                if root.upd-link: Rectangle {
+                    height: 32px;
+                    border-radius: 6px;
+                    background: chip-ta.has-hover ? Palette.accent.brighter(15%) : Palette.accent;
+                    Text {
+                        text: root.upd-chip;
+                        color: #0b1a22;
+                        font-size: 13px;
+                        font-weight: 600;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                    }
+                    chip-ta := TouchArea { clicked => { upd-popup.show(); } }
+                }
             }
         }
         VerticalLayout {
@@ -586,7 +684,7 @@ export component MainWindow inherits Window {
                     SectionTitle { text: Strings.sec-updates; }
                     Row {
                         label: root.upd-text;
-                        if root.upd-link: Button { text: Strings.open-release; clicked => { root.open-release-clicked(); } }
+                        if root.upd-link: Button { text: root.upd-whats-new; clicked => { upd-popup.show(); } }
                         Button { text: Strings.check-update; enabled: !root.upd-busy; clicked => { root.check-update-clicked(); } }
                     }
                     Row {

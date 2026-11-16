@@ -99,6 +99,137 @@ fn selected_lang(w: &MainWindow) -> i18n::ResolvedLang {
     i18n::resolve(l.unwrap_or_default())
 }
 
+/// Setup switch that keeps the current install mode, or None for a portable copy (no
+/// uninstaller next to the exe): updating that would install a second copy elsewhere.
+fn install_mode() -> Option<&'static str> {
+    let exe = std::env::current_exe().ok()?;
+    if !exe.with_file_name("unins000.exe").exists() {
+        return None;
+    }
+    let all_users = crate::admin::in_program_files(&exe, &crate::admin::program_files_dirs());
+    Some(if all_users {
+        "/ALLUSERS"
+    } else {
+        "/CURRENTUSER"
+    })
+}
+
+/// Downloads and checks the setup exe off the UI thread, then runs it silently. Setup closes
+/// Sirah Mute (this window too) and starts the new version when it is done.
+fn install_update(w: &MainWindow) {
+    let Some(mode) = install_mode() else { return };
+    let asset = update::Asset {
+        url: w.get_upd_asset_url().into(),
+        sha256: w.get_upd_asset_sha().into(),
+        size: w.get_upd_asset_size().max(0) as u64,
+    };
+    w.set_upd_installing(true);
+    w.set_upd_install_error("".into());
+    show_progress(w, 0, asset.size);
+    let ww = w.as_weak();
+    std::thread::spawn(move || {
+        let mut shown = 0usize;
+        let mut on_bytes = |n: usize| {
+            if n - shown >= 128 << 10 {
+                shown = n;
+                let size = asset.size;
+                let _ = ww.upgrade_in_event_loop(move |w| show_progress(&w, n as u64, size));
+            }
+        };
+        let res = update::download_installer(&asset, &mut on_bytes);
+        let res = res.and_then(|p| {
+            // ponytail: no progress from setup itself; its own /SILENT window shows the install
+            let _ = ww.upgrade_in_event_loop(|w| {
+                w.set_upd_progress(1.0);
+                w.set_upd_progress_text(i18n::t(selected_lang(&w), Key::UpdInstalling).into());
+            });
+            std::process::Command::new(&p)
+                .args([mode, "/SILENT", "/SUPPRESSMSGBOXES", "/NORESTART"])
+                .spawn()
+                .map(drop)
+                .map_err(|e| e.to_string())
+        });
+        if let Err(e) = &res {
+            crate::log!("settings: update install failed: {e}");
+            let _ = ww.upgrade_in_event_loop(|w| {
+                w.set_upd_installing(false);
+                w.set_upd_install_error(i18n::t(selected_lang(&w), Key::UpdInstallFailed).into());
+            });
+        } // on success the button stays disabled until setup closes this window
+    });
+}
+
+/// "Downloading 3.2 / 7.1 MB" and the bar.
+fn show_progress(w: &MainWindow, done: u64, total: u64) {
+    let mb = |b: u64| format!("{:.1}", b as f64 / 1_048_576.0);
+    w.set_upd_progress(if total > 0 {
+        done as f32 / total as f32
+    } else {
+        0.0
+    });
+    w.set_upd_progress_text(
+        i18n::t(selected_lang(w), Key::UpdDownloading)
+            .replace("{done}", &mb(done))
+            .replace("{total}", &mb(total))
+            .into(),
+    );
+}
+
+/// Fetches the latest release off the UI thread and fills the Updates section, the sidebar
+/// chip and the "what's new" popup; `popup` shows it when a newer version is found.
+fn check_update(w: &MainWindow, popup: bool) {
+    if w.get_upd_busy() {
+        return; // a check is running; it reads the language when it finishes
+    }
+    w.set_upd_busy(true);
+    w.set_upd_link(false);
+    w.set_upd_text(i18n::t(selected_lang(w), Key::UpdChecking).into());
+    let ww = w.as_weak();
+    std::thread::spawn(move || {
+        let rel = update::fetch_latest();
+        if let Err(e) = &rel {
+            crate::log!("settings: update check failed: {e}");
+        }
+        let newer = rel
+            .as_ref()
+            .map(|r| update::is_newer(&r.tag, crate::app::VERSION))
+            .map_err(|e| e.clone());
+        let status = update_status(newer);
+        let (tag, url, highlights, installer) = rel
+            .map(|r| (r.tag, r.url, r.highlights, r.installer))
+            .unwrap_or_default();
+        let _ = ww.upgrade_in_event_loop(move |w| {
+            // read the language now: it may have changed while the check ran
+            let lang = selected_lang(&w);
+            let (key, link) = match status {
+                UpdateStatus::Available => (Key::UpdNewer, true),
+                UpdateStatus::UpToDate => (Key::UpdCurrent, false),
+                UpdateStatus::Failed => (Key::UpdFailed, false),
+            };
+            w.set_upd_text(i18n::t(lang, key).replace("{tag}", &tag).into());
+            w.set_upd_chip(i18n::t(lang, Key::UpdChip).replace("{tag}", &tag).into());
+            w.set_upd_title(i18n::t(lang, Key::UpdTitle).into());
+            w.set_upd_whats_new(i18n::t(lang, Key::UpdWhatsNew).into());
+            w.set_upd_later(i18n::t(lang, Key::UpdLater).into());
+            let items: Vec<slint::SharedString> = highlights.into_iter().map(Into::into).collect();
+            w.set_upd_highlights(slint::ModelRc::new(slint::VecModel::from(items)));
+            w.set_upd_tag(tag.into());
+            w.set_upd_can_install(installer.is_some() && install_mode().is_some());
+            w.set_upd_install(i18n::t(lang, Key::UpdInstall).into());
+            let a = installer.unwrap_or_default();
+            w.set_upd_asset_url(a.url.into());
+            w.set_upd_asset_sha(a.sha256.into());
+            w.set_upd_asset_size(a.size.min(i32::MAX as u64) as i32);
+            w.set_upd_url(url.into());
+            w.set_upd_link(link);
+            w.set_upd_busy(false);
+            if link && popup {
+                w.invoke_show_update();
+            }
+        });
+    });
+}
+
 /// `refreshers` rebuild tab content whose text was baked at build time (device lists, monitors).
 pub fn setup(w: &MainWindow, state: &Rc<RefCell<State>>, refreshers: Vec<Rc<dyn Fn()>>) {
     {
@@ -172,8 +303,7 @@ pub fn setup(w: &MainWindow, state: &Rc<RefCell<State>>, refreshers: Vec<Rc<dyn 
             for r in &refreshers {
                 r();
             }
-            w.set_upd_text("".into());
-            w.set_upd_link(false);
+            check_update(&w, false); // texts are in the old language
             w.set_gen_admin_error("".into());
             set_admin_note(&w);
         }
@@ -184,39 +314,17 @@ pub fn setup(w: &MainWindow, state: &Rc<RefCell<State>>, refreshers: Vec<Rc<dyn 
 
     let ww = w.as_weak();
     w.on_check_update_clicked(move || {
-        let Some(w) = ww.upgrade() else { return };
-        w.set_upd_busy(true);
-        w.set_upd_link(false);
-        w.set_upd_text(i18n::t(selected_lang(&w), Key::UpdChecking).into());
-        let ww = w.as_weak();
-        std::thread::spawn(move || {
-            let rel = update::fetch_latest();
-            if let Err(e) = &rel {
-                crate::log!("settings: update check failed: {e}");
-            }
-            let newer = rel
-                .as_ref()
-                .map(|r| update::is_newer(&r.tag, crate::app::VERSION))
-                .map_err(|e| e.clone());
-            let status = update_status(newer);
-            let (tag, url) = rel.map(|r| (r.tag, r.url)).unwrap_or_default();
-            let _ = ww.upgrade_in_event_loop(move |w| {
-                // read the language now: it may have changed while the check ran
-                let (key, link) = match status {
-                    UpdateStatus::Available => (Key::UpdNewer, true),
-                    UpdateStatus::UpToDate => (Key::UpdCurrent, false),
-                    UpdateStatus::Failed => (Key::UpdFailed, false),
-                };
-                w.set_upd_text(
-                    i18n::t(selected_lang(&w), key)
-                        .replace("{tag}", &tag)
-                        .into(),
-                );
-                w.set_upd_url(url.into());
-                w.set_upd_link(link);
-                w.set_upd_busy(false);
-            });
-        });
+        if let Some(w) = ww.upgrade() {
+            check_update(&w, true);
+        }
+    });
+    check_update(w, true); // on open, so a new version shows without a click
+
+    let ww = w.as_weak();
+    w.on_install_update_clicked(move || {
+        if let Some(w) = ww.upgrade() {
+            install_update(&w);
+        }
     });
 
     let ww = w.as_weak();
