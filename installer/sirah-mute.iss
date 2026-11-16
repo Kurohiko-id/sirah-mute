@@ -1,4 +1,4 @@
-; Sirah Mute installer (Inno Setup 6). Supports both per-user and all-users installs
+; Sirah Mute installer (Inno Setup 6). Supports both all-users (default) and per-user installs
 ; (the setup asks: PrivilegesRequiredOverridesAllowed=dialog).
 ; Build:  ISCC /DMyAppVersion=2.0.0 /DExePath=<path\to\sirahmute.exe> installer\sirah-mute.iss
 ; Output: installer\Output\SirahMute-Setup-<version>.exe
@@ -32,7 +32,8 @@ AppUpdatesURL={#MyAppURL}/releases
 DefaultDirName={autopf}\SirahMute
 DisableDirPage=auto
 DisableProgramGroupPage=yes
-PrivilegesRequired=lowest
+; Defaults to all users: only that install can use "Run as administrator" (see [Messages]).
+PrivilegesRequired=admin
 PrivilegesRequiredOverridesAllowed=dialog
 UsePreviousPrivileges=no
 SetupIconFile=..\kuromute\assets\sirah.ico
@@ -51,6 +52,10 @@ MinVersion=10.0
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
+
+[Messages]
+; Shown in the install-mode dialog when PrivilegesRequired=admin.
+PrivilegesRequiredOverrideText1=Choose "Install for all users" if you want the mute hotkey to work:%n• inside games that run as administrator%n• while OBS runs as administrator%n%nChoose "Install for me only" if you don't have an administrator account.
 
 [Tasks]
 Name: "desktopicon"; Description: "Create a &desktop shortcut"; Flags: unchecked
