@@ -737,29 +737,8 @@ impl State {
         }
     }
 
-    fn apply_autostart(&self, changed: bool) {
-        if self.cfg.run_as_admin {
-            // The elevated task replaces the Run key; only an elevated core may touch it.
-            if crate::admin::is_elevated() {
-                if let Err(e) = autostart::apply(false) {
-                    log!("autostart: {e}");
-                }
-                // Re-registering at startup could end the task instance that is this core;
-                // the --admin-on helper already registered it.
-                if changed && let Err(e) = crate::admin::create_task(self.cfg.autostart) {
-                    log!("autostart: task: {e}");
-                }
-            } else {
-                static LOGGED: std::sync::atomic::AtomicBool =
-                    std::sync::atomic::AtomicBool::new(false);
-                if !LOGGED.swap(true, std::sync::atomic::Ordering::Relaxed) {
-                    log!(
-                        "autostart: run_as_admin but not elevated; leaving Run key and task alone"
-                    );
-                }
-            }
-            return;
-        }
+    /// Same Run value in both modes: in admin mode its unelevated launch hands off to the task.
+    fn apply_autostart(&self) {
         if let Err(e) = autostart::apply(self.cfg.autostart) {
             log!("autostart: {e}");
         }
@@ -789,7 +768,7 @@ impl State {
         if self.cfg.force_on_startup {
             spawn_set_defaults(self.configured_defaults(true, true));
         }
-        self.apply_autostart(false);
+        self.apply_autostart();
         spawn_update_check(self.hwnd, false);
         // Endpoint notifications don't replay current state: act on a drift
         // that happened while the app was off (force_on_startup already reverts).
@@ -1046,7 +1025,7 @@ impl State {
             self.guard_check();
         }
         if ch.autostart {
-            self.apply_autostart(true);
+            self.apply_autostart();
         }
         if ch.talk {
             self.update_talk_watch();

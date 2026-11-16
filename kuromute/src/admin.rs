@@ -78,17 +78,13 @@ fn esc(s: &str) -> String {
         .replace('\'', "&apos;")
 }
 
-pub fn task_xml(exe: &Path, user_id: &str, logon: bool) -> String {
+/// No trigger: sign-in starts the HKCU Run value, whose unelevated launch runs this task.
+pub fn task_xml(exe: &Path, user_id: &str) -> String {
     let user = esc(user_id);
-    let trigger = if logon {
-        format!("<LogonTrigger><Enabled>true</Enabled><UserId>{user}</UserId></LogonTrigger>")
-    } else {
-        String::new()
-    };
     format!(
         r#"<?xml version="1.0" encoding="UTF-16"?>
 <Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
-  <Triggers>{trigger}</Triggers>
+  <Triggers />
   <Principals>
     <Principal id="Author">
       <UserId>{user}</UserId>
@@ -148,7 +144,7 @@ fn schtasks(args: &[&str]) -> Result<(), String> {
     ))
 }
 
-pub fn create_task(logon: bool) -> Result<(), String> {
+pub fn create_task() -> Result<(), String> {
     let exe = std::env::current_exe().map_err(|e| e.to_string())?;
     if !in_program_files(&exe, &program_files_dirs()) {
         return Err("exe is not under Program Files".into());
@@ -158,7 +154,6 @@ pub fn create_task(logon: bool) -> Result<(), String> {
     let xml = task_xml(
         &exe,
         &user_id(&env("USERDOMAIN"), &env("COMPUTERNAME"), &user),
-        logon,
     );
     let mut bytes = vec![0xFF, 0xFE];
     bytes.extend(xml.encode_utf16().flat_map(u16::to_le_bytes));
@@ -252,13 +247,7 @@ pub fn helper(on: bool) -> i32 {
         }
     };
     let r = if on {
-        // Missing or unreadable config: the Config default (autostart on).
-        let logon = crate::config::read(&crate::config::config_path())
-            .ok()
-            .flatten()
-            .unwrap_or_default()
-            .autostart;
-        create_task(logon).and_then(|()| {
+        create_task().and_then(|()| {
             let r = close_core().and_then(|()| run_task());
             if r.is_err()
                 && let Err(e) = delete_task()
@@ -335,7 +324,6 @@ mod tests {
         let x = task_xml(
             Path::new(r"C:\Program Files\Sirah & Co\sirahmute.exe"),
             r"PC\Budi",
-            true,
         );
         for want in [
             "<ExecutionTimeLimit>PT0S</ExecutionTimeLimit>",
@@ -345,14 +333,14 @@ mod tests {
             "<Priority>4</Priority>",
             "<RunLevel>HighestAvailable</RunLevel>",
             "<LogonType>InteractiveToken</LogonType>",
-            "<LogonTrigger>",
             r"<Command>C:\Program Files\Sirah &amp; Co\sirahmute.exe</Command>",
             "<Arguments>--from-task</Arguments>",
             r"<UserId>PC\Budi</UserId>",
         ] {
             assert!(x.contains(want), "missing {want}");
         }
-        assert!(!task_xml(Path::new(r"C:\x.exe"), "u", false).contains("<LogonTrigger>"));
+        // sign-in goes through the HKCU Run value, which relaunches via the task
+        assert!(!x.contains("<LogonTrigger>"));
     }
 
     #[test]
