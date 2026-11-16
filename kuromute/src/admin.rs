@@ -3,10 +3,14 @@ use std::os::windows::process::CommandExt;
 use std::path::{Component, Path, PathBuf};
 use std::process::Command;
 
-use windows::Win32::Foundation::{CloseHandle, HANDLE};
+use windows::Win32::Foundation::{CloseHandle, HANDLE, WAIT_OBJECT_0};
 use windows::Win32::Security::{GetTokenInformation, TOKEN_ELEVATION, TOKEN_QUERY, TokenElevation};
-use windows::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
-use windows::Win32::UI::WindowsAndMessaging::{FindWindowW, PostMessageW, WM_CLOSE};
+use windows::Win32::System::Threading::{
+    GetCurrentProcess, OpenProcess, OpenProcessToken, PROCESS_SYNCHRONIZE, WaitForSingleObject,
+};
+use windows::Win32::UI::WindowsAndMessaging::{
+    FindWindowW, GetWindowThreadProcessId, PostMessageW, WM_CLOSE,
+};
 use windows::core::PCWSTR;
 
 use crate::log;
@@ -200,10 +204,13 @@ pub fn run_task() -> Result<(), String> {
 
 /// Hands `target` to the already-running unelevated shell via explorer.
 pub fn open_unelevated(target: &str) {
-    let _ = Command::new("explorer.exe")
+    if let Err(e) = Command::new("explorer.exe")
         .arg(target)
         .creation_flags(CREATE_NO_WINDOW)
-        .spawn();
+        .spawn()
+    {
+        log!("admin: explorer: {e}");
+    }
 }
 
 /// True = hand startup to the elevated task (caller then exits).
@@ -211,19 +218,26 @@ pub fn relaunch_decision(run_as_admin: bool, elevated: bool, from_task: bool, in
     run_as_admin && !elevated && !from_task && in_pf
 }
 
-/// Asks the running core to quit and waits up to 5 s for its window to go away.
-fn close_core() {
+/// Asks the running core to quit and waits up to 5 s for its process to exit.
+/// No core running = Ok; timeout or failure = Err.
+fn close_core() -> Result<(), String> {
     unsafe {
         let Ok(h) = FindWindowW(WINDOW_CLASS, PCWSTR::null()) else {
-            return;
+            return Ok(());
         };
-        let _ = PostMessageW(Some(h), WM_CLOSE, Default::default(), Default::default());
-        for _ in 0..50 {
-            std::thread::sleep(std::time::Duration::from_millis(100));
-            if FindWindowW(WINDOW_CLASS, PCWSTR::null()).is_err() {
-                return;
-            }
-        }
+        let mut pid = 0u32;
+        GetWindowThreadProcessId(h, Some(&mut pid));
+        let proc = OpenProcess(PROCESS_SYNCHRONIZE, false, pid).map_err(|e| e.to_string())?;
+        let r = if PostMessageW(Some(h), WM_CLOSE, Default::default(), Default::default()).is_err()
+        {
+            Err("could not post WM_CLOSE to the core".to_string())
+        } else if WaitForSingleObject(proc, 5000) == WAIT_OBJECT_0 {
+            Ok(())
+        } else {
+            Err("core did not exit within 5 s".to_string())
+        };
+        let _ = CloseHandle(proc);
+        r
     }
 }
 
@@ -243,18 +257,15 @@ pub fn helper(on: bool) -> i32 {
             .flatten()
             .unwrap_or_default()
             .autostart;
-        create_task(logon).map(|()| {
-            close_core();
-            run_task()
-        })
+        create_task(logon)
+            .and_then(|()| close_core())
+            .and_then(|()| run_task())
     } else {
-        delete_task().map(|()| {
-            close_core();
-            open_unelevated(&exe.to_string_lossy());
-            Ok(())
-        })
+        delete_task()
+            .and_then(|()| close_core())
+            .map(|()| open_unelevated(&exe.to_string_lossy()))
     };
-    match r.and_then(|x| x) {
+    match r {
         Ok(()) => 0,
         Err(e) => {
             log!("admin: helper {}: {e}", if on { "on" } else { "off" });

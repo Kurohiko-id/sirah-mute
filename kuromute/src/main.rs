@@ -95,6 +95,10 @@ fn relaunch_to_task(from_task: bool) -> bool {
         .is_some_and(|c| c.run_as_admin);
     let in_pf = std::env::current_exe()
         .is_ok_and(|e| admin::in_program_files(&e, &admin::program_files_dirs()));
+    // A core is already up: let app::run post "show settings" to it instead of a no-op task run.
+    if app::core_running() {
+        return false;
+    }
     if !admin::relaunch_decision(run_as_admin, admin::is_elevated(), from_task, in_pf) {
         return false;
     }

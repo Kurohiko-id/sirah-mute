@@ -214,6 +214,11 @@ fn reg() -> &'static Registered {
     })
 }
 
+/// True when a core window already exists.
+pub fn core_running() -> bool {
+    unsafe { FindWindowW(WINDOW_CLASS, PCWSTR::null()).is_ok() }
+}
+
 /// Posts a registered message (by name) to the running core. False if no core is running.
 pub fn post_to_core(name: PCWSTR) -> bool {
     unsafe {
@@ -732,14 +737,16 @@ impl State {
         }
     }
 
-    fn apply_autostart(&self) {
+    fn apply_autostart(&self, changed: bool) {
         if self.cfg.run_as_admin {
             // The elevated task replaces the Run key; only an elevated core may touch it.
             if crate::admin::is_elevated() {
                 if let Err(e) = autostart::apply(false) {
                     log!("autostart: {e}");
                 }
-                if let Err(e) = crate::admin::create_task(self.cfg.autostart) {
+                // Re-registering at startup could end the task instance that is this core;
+                // the --admin-on helper already registered it.
+                if changed && let Err(e) = crate::admin::create_task(self.cfg.autostart) {
                     log!("autostart: task: {e}");
                 }
             } else {
@@ -782,7 +789,7 @@ impl State {
         if self.cfg.force_on_startup {
             spawn_set_defaults(self.configured_defaults(true, true));
         }
-        self.apply_autostart();
+        self.apply_autostart(false);
         spawn_update_check(self.hwnd, false);
         // Endpoint notifications don't replay current state: act on a drift
         // that happened while the app was off (force_on_startup already reverts).
@@ -1039,7 +1046,7 @@ impl State {
             self.guard_check();
         }
         if ch.autostart {
-            self.apply_autostart();
+            self.apply_autostart(true);
         }
         if ch.talk {
             self.update_talk_watch();
