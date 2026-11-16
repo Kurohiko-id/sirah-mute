@@ -116,6 +116,10 @@ pub enum Key {
     LangLabel,
     LangAuto,
     AutostartLabel,
+    AdminLabel,
+    AdminHint,
+    AdminNeedsAllUsers,
+    AdminFailed,
     VersionLabel,
     SecUpdates,
     CheckUpdateBtn,
@@ -148,7 +152,7 @@ pub enum Key {
 
 impl Key {
     #[cfg(test)]
-    pub const ALL: [Key; 119] = [
+    pub const ALL: [Key; 123] = [
         Key::Muted,
         Key::Unmuted,
         Key::MicDisconnected,
@@ -240,6 +244,10 @@ impl Key {
         Key::LangLabel,
         Key::LangAuto,
         Key::AutostartLabel,
+        Key::AdminLabel,
+        Key::AdminHint,
+        Key::AdminNeedsAllUsers,
+        Key::AdminFailed,
         Key::VersionLabel,
         Key::SecUpdates,
         Key::CheckUpdateBtn,
@@ -476,6 +484,24 @@ pub fn t(l: ResolvedLang, k: Key) -> &'static str {
         (LangAuto, Id) => "Otomatis (ikut Windows)",
         (AutostartLabel, En) => "Start with Windows",
         (AutostartLabel, Id) => "Jalan saat Windows start",
+        (AdminLabel, En) => "Run as administrator",
+        (AdminLabel, Id) => "Jalankan sebagai admin",
+        (AdminHint, En) => {
+            "So the hotkey works in games and OBS running as admin. Asks for permission once."
+        }
+        (AdminHint, Id) => {
+            "Supaya hotkey jalan di game dan OBS yang jalan sebagai admin. Minta izin sekali."
+        }
+        (AdminNeedsAllUsers, En) => {
+            "Needs Sirah Mute installed for all users. Run the installer again and choose \"Install for all users\"."
+        }
+        (AdminNeedsAllUsers, Id) => {
+            "Perlu Sirah Mute yang di-install untuk semua pengguna. Jalankan installer lagi dan pilih \"Install for all users\"."
+        }
+        (AdminFailed, En) => {
+            "Couldn't change it. Permission was declined or Task Scheduler failed; see the log."
+        }
+        (AdminFailed, Id) => "Gagal mengubah. Izin ditolak atau Task Scheduler gagal; cek log.",
         (SecUpdates, En) => "Updates & support",
         (SecUpdates, Id) => "Update & bantuan",
         (CheckUpdateBtn, En) => "Check for updates",

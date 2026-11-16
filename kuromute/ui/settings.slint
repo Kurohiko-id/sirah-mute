@@ -70,6 +70,7 @@ export global Strings {
     in property <string> lang-label;
     in property <[string]> lang-options;
     in property <string> autostart-label;
+    in property <string> admin-label;
     in property <string> version-label;
     in property <string> sec-updates;
     in property <string> check-update;
@@ -226,6 +227,13 @@ export component MainWindow inherits Window {
     // Umum tab (filled by settings::umum)
     in-out property <int> gen-lang: 0;
     in-out property <bool> gen-autostart;
+    in-out property <bool> gen-admin;
+    in property <bool> gen-admin-enabled;
+    in property <bool> gen-admin-busy;
+    in property <string> gen-admin-error;
+    in property <string> gen-admin-note;
+    callback gen-admin-toggled();
+    callback gen-admin-finished(bool);
     in property <string> app-version;
     in property <string> upd-text;
     in property <string> upd-url;
@@ -552,6 +560,16 @@ export component MainWindow inherits Window {
                         label: Strings.autostart-label;
                         CheckBox { checked <=> root.gen-autostart; toggled => { root.gen-changed(); } }
                     }
+                    Row {
+                        label: Strings.admin-label;
+                        CheckBox {
+                            checked <=> root.gen-admin;
+                            enabled: root.gen-admin-enabled && !root.gen-admin-busy;
+                            toggled => { root.gen-admin-toggled(); }
+                        }
+                    }
+                    Note { text: root.gen-admin-note; color: Palette.text-dim; }
+                    if root.gen-admin-error != "": Note { text: root.gen-admin-error; color: #ff6b6b; }
                     Row {
                         label: Strings.version-label;
                         Text { text: root.app-version; color: Palette.text-dim; vertical-alignment: center; }

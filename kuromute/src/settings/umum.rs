@@ -1,12 +1,84 @@
 //! Umum tab glue: language (live), autostart, update check, log folder, report bug.
 use super::model::{UpdateStatus, update_status};
+use super::save::SaveOutcome;
 use super::ui::{MainWindow, State, apply_lang, commit};
 use crate::config::{self, Lang};
 use crate::i18n::{self, Key};
 use crate::update;
 use slint::ComponentHandle;
 use std::cell::RefCell;
+use std::os::windows::ffi::OsStrExt;
 use std::rc::Rc;
+
+/// (checkbox enabled, hint override). Only a Program Files install can own the elevated task.
+fn admin_row(in_pf: bool) -> (bool, Option<Key>) {
+    if in_pf {
+        (true, None)
+    } else {
+        (false, Some(Key::AdminNeedsAllUsers))
+    }
+}
+
+/// (checkbox and config value, error) once the helper has finished.
+fn after_helper(want: bool, exit_ok: bool) -> (bool, Option<Key>) {
+    if exit_ok {
+        (want, None)
+    } else {
+        (!want, Some(Key::AdminFailed))
+    }
+}
+
+fn set_admin_note(w: &MainWindow) {
+    let in_pf = std::env::current_exe()
+        .is_ok_and(|e| crate::admin::in_program_files(&e, &crate::admin::program_files_dirs()));
+    let (enabled, hint) = admin_row(in_pf);
+    w.set_gen_admin_enabled(enabled);
+    let key = hint.unwrap_or(Key::AdminHint);
+    w.set_gen_admin_note(i18n::t(selected_lang(w), key).into());
+}
+
+/// Runs `sirahmute.exe --admin-on/--admin-off` elevated (UAC prompt unless already elevated)
+/// and waits for it. A declined prompt or any launch error counts as failure.
+fn run_helper(on: bool) -> bool {
+    use windows::Win32::Foundation::CloseHandle;
+    use windows::Win32::System::Threading::{GetExitCodeProcess, INFINITE, WaitForSingleObject};
+    use windows::Win32::UI::Shell::{SEE_MASK_NOCLOSEPROCESS, SHELLEXECUTEINFOW, ShellExecuteExW};
+    use windows::Win32::UI::WindowsAndMessaging::SW_HIDE;
+    use windows::core::{PCWSTR, w};
+    let Ok(exe) = std::env::current_exe() else {
+        return false;
+    };
+    let file: Vec<u16> = exe.as_os_str().encode_wide().chain([0]).collect();
+    let args = if on {
+        w!("--admin-on")
+    } else {
+        w!("--admin-off")
+    };
+    let mut info = SHELLEXECUTEINFOW {
+        cbSize: size_of::<SHELLEXECUTEINFOW>() as u32,
+        fMask: SEE_MASK_NOCLOSEPROCESS,
+        lpVerb: w!("runas"),
+        lpFile: PCWSTR(file.as_ptr()),
+        lpParameters: args,
+        nShow: SW_HIDE.0,
+        ..Default::default()
+    };
+    unsafe {
+        if let Err(e) = ShellExecuteExW(&mut info) {
+            crate::log!("settings: admin helper launch failed: {e}");
+            return false;
+        }
+        if info.hProcess.is_invalid() {
+            return false;
+        }
+        // the helper caps its own waits at a few seconds
+        WaitForSingleObject(info.hProcess, INFINITE);
+        let mut code = 1u32;
+        let ok = GetExitCodeProcess(info.hProcess, &mut code).is_ok();
+        let _ = CloseHandle(info.hProcess);
+        ok && code == 0
+    }
+}
 
 pub const SAWERIA_URL: &str = "https://saweria.co/Kurohiko";
 pub const TOPUP_URL: &str = "https://kurohikotopup.com";
@@ -28,8 +100,46 @@ pub fn setup(w: &MainWindow, state: &Rc<RefCell<State>>, refreshers: Vec<Rc<dyn 
                 .map_or(0, |i| i as i32),
         );
         w.set_gen_autostart(s.cfg.autostart);
+        w.set_gen_admin(s.cfg.run_as_admin);
         w.set_app_version(crate::app::VERSION.into());
     }
+
+    set_admin_note(w);
+
+    let (ww, st) = (w.as_weak(), state.clone());
+    w.on_gen_admin_toggled(move || {
+        let Some(w) = ww.upgrade() else { return };
+        let want = w.get_gen_admin();
+        w.set_gen_admin_error("".into());
+        st.borrow_mut().cfg.run_as_admin = want;
+        if !matches!(commit(&st, &w), SaveOutcome::Saved(_)) {
+            // not saved: the helper must not run
+            st.borrow_mut().cfg.run_as_admin = !want;
+            w.set_gen_admin(!want);
+            w.set_gen_admin_error(i18n::t(selected_lang(&w), Key::AdminFailed).into());
+            return;
+        }
+        w.set_gen_admin_busy(true);
+        let ww = w.as_weak();
+        std::thread::spawn(move || {
+            let ok = run_helper(want);
+            let _ = ww.upgrade_in_event_loop(move |w| w.invoke_gen_admin_finished(ok));
+        });
+    });
+
+    let (ww, st) = (w.as_weak(), state.clone());
+    w.on_gen_admin_finished(move |ok| {
+        let Some(w) = ww.upgrade() else { return };
+        let want = st.borrow().cfg.run_as_admin;
+        let (value, err) = after_helper(want, ok);
+        w.set_gen_admin_busy(false);
+        w.set_gen_admin(value);
+        if let Some(k) = err {
+            w.set_gen_admin_error(i18n::t(selected_lang(&w), k).into());
+            st.borrow_mut().cfg.run_as_admin = value;
+            commit(&st, &w);
+        }
+    });
 
     let (ww, st) = (w.as_weak(), state.clone());
     w.on_gen_changed(move || {
@@ -51,6 +161,8 @@ pub fn setup(w: &MainWindow, state: &Rc<RefCell<State>>, refreshers: Vec<Rc<dyn 
             }
             w.set_upd_text("".into());
             w.set_upd_link(false);
+            w.set_gen_admin_error("".into());
+            set_admin_note(&w);
         }
         if changed {
             commit(&st, &w);
@@ -120,4 +232,23 @@ pub fn setup(w: &MainWindow, state: &Rc<RefCell<State>>, refreshers: Vec<Rc<dyn 
 
     w.on_support_saweria_clicked(|| crate::app::open_url(SAWERIA_URL));
     w.on_support_topup_clicked(|| crate::app::open_url(TOPUP_URL));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn admin_row_state() {
+        assert_eq!(admin_row(true), (true, None));
+        assert_eq!(admin_row(false), (false, Some(Key::AdminNeedsAllUsers)));
+    }
+
+    #[test]
+    fn admin_toggle_reverts_on_failure() {
+        assert_eq!(after_helper(true, true), (true, None));
+        assert_eq!(after_helper(false, true), (false, None));
+        assert_eq!(after_helper(true, false), (false, Some(Key::AdminFailed)));
+        assert_eq!(after_helper(false, false), (true, Some(Key::AdminFailed)));
+    }
 }

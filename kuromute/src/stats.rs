@@ -358,6 +358,7 @@ pub fn features(c: &Config) -> Vec<String> {
         "guard_revert",
     );
     on(c.autostart, "autostart");
+    on(c.run_as_admin, "run_as_admin");
     on(c.talk_warn_enabled, "talk_warn");
     on(c.cough_hold, "cough_hold");
     on(c.other_mics.iter().any(|m| m.enabled), "other_mics");
@@ -539,6 +540,7 @@ mod tests {
                 talk_warn_enabled: true,
                 hotkey: Hotkey { mods: 0, vk: 124 },
                 cough_hold: true,
+                run_as_admin: true,
                 other_mics: vec![crate::config::OtherMic {
                     id: "{0.0.1}.{secret}".into(),
                     name: "PD400X".into(),
@@ -549,7 +551,9 @@ mod tests {
             let f = features(&c);
             assert!(f.len() > 10, "{f:?}");
             assert!(
-                f.contains(&"f_other_mics".to_string()) && f.contains(&"f_cough_hold".to_string())
+                f.contains(&"f_other_mics".to_string())
+                    && f.contains(&"f_cough_hold".to_string())
+                    && f.contains(&"f_run_as_admin".to_string())
             );
             for e in &f {
                 assert!(e.starts_with("f_") && valid_ev(e), "bad event name {e}");
