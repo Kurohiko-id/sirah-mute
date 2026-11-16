@@ -30,7 +30,32 @@ pub fn request(
     body: Option<&[u8]>,
     timeout_ms: i32,
 ) -> Result<(u32, Vec<u8>), String> {
-    const MAX: usize = 1 << 20;
+    request_max(
+        verb,
+        host,
+        path,
+        headers,
+        body,
+        timeout_ms,
+        1 << 20,
+        &mut |_| {},
+    )
+}
+
+/// `request` with a caller-chosen body limit and a callback with the bytes received so far
+/// (the installer download). WinHTTP follows redirects, including GitHub's release-asset
+/// redirect to its download host.
+#[allow(clippy::too_many_arguments)]
+pub fn request_max(
+    verb: &str,
+    host: &str,
+    path: &str,
+    headers: &str,
+    body: Option<&[u8]>,
+    timeout_ms: i32,
+    max: usize,
+    progress: &mut dyn FnMut(usize),
+) -> Result<(u32, Vec<u8>), String> {
     let err = |what: &str| format!("{what}: {}", windows::core::Error::from_thread());
     unsafe {
         let agent = w("SirahMute");
@@ -99,7 +124,8 @@ pub fn request(
                 break;
             }
             out.extend_from_slice(&buf[..n as usize]);
-            if out.len() > MAX {
+            progress(out.len());
+            if out.len() > max {
                 return Err("response too large".into());
             }
         }
