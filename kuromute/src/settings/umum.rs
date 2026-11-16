@@ -76,7 +76,8 @@ fn run_helper(on: bool) -> bool {
         if info.hProcess.is_invalid() {
             return false;
         }
-        // UAC prompt plus the helper's own few-second waits fit in 30 s
+        // ShellExecuteExW returned after the UAC decision, so 30 s covers only the helper run
+        // (its own waits are a few seconds)
         if WaitForSingleObject(info.hProcess, 30_000) != WAIT_OBJECT_0 {
             crate::log!("settings: admin helper timed out");
             let _ = CloseHandle(info.hProcess);
