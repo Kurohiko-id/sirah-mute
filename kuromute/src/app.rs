@@ -35,7 +35,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
     PostQuitMessage, RegisterClassExW, RegisterWindowMessageW, SMTO_ABORTIFHUNG, SPI_SETWORKAREA,
     SW_SHOWNORMAL, SendMessageTimeoutW, SetTimer, TranslateMessage, WINDOW_EX_STYLE, WM_CLOSE,
     WM_CONTEXTMENU, WM_DISPLAYCHANGE, WM_DPICHANGED, WM_ENDSESSION, WM_HOTKEY, WM_LBUTTONUP,
-    WM_POWERBROADCAST, WM_SETTINGCHANGE, WM_TIMER, WNDCLASSEXW, WS_OVERLAPPED,
+    WM_INPUT, WM_POWERBROADCAST, WM_SETTINGCHANGE, WM_TIMER, WNDCLASSEXW, WS_OVERLAPPED,
 };
 use windows::core::{HSTRING, PCWSTR, w};
 
@@ -420,6 +420,10 @@ struct State {
     /// Settings process named by the pause message: Some(None) = open failed (resume at next tick).
     settings_proc: Option<Option<HANDLE>>,
     hotkey_paused: bool,
+    /// Hotkey vk is down per Raw Input (filters key-repeat make codes).
+    raw_down: bool,
+    /// Last hotkey action, to drop the second path (WM_HOTKEY / Raw Input) of one press.
+    last_hotkey_at: Option<Instant>,
     /// Reply to MSG_RELOAD: 0 ok, 1 hotkey registration failed.
     last_reload_code: isize,
     talk_meter: Option<IAudioMeterInformation>,
@@ -810,6 +814,36 @@ impl State {
         }
     }
 
+    /// Raw Input path for the hotkey (see `hotkey::register_raw_sink`).
+    fn on_raw_key(&mut self, vk: u32, is_break: bool) {
+        if vk != self.cfg.hotkey.vk {
+            return;
+        }
+        if is_break {
+            self.raw_down = false;
+            return;
+        }
+        // Raw Input repeats make codes while held; only the first one is a press.
+        if !std::mem::replace(&mut self.raw_down, true)
+            && crate::settings::record::held_mods() == self.cfg.hotkey.mods
+        {
+            self.fire_hotkey();
+        }
+    }
+
+    /// Single entry for WM_HOTKEY and Raw Input; one press may arrive through both.
+    fn fire_hotkey(&mut self) {
+        // A failed registration usually means another app owns the key: don't act on it too.
+        if self.hotkey_paused || self.hotkey_err.is_some() {
+            return;
+        }
+        let now = Instant::now();
+        if hotkey::should_fire(self.last_hotkey_at, now) {
+            self.last_hotkey_at = Some(now);
+            self.on_hotkey();
+        }
+    }
+
     fn on_hotkey(&mut self) {
         if !self.cfg.cough_hold
             || hotkey_action(self.cfg.mic_id.as_deref(), self.last_muted.is_some())
@@ -1036,7 +1070,7 @@ impl State {
     fn handle(&mut self, m: u32, wp: WPARAM, lp: LPARAM) {
         let r = reg();
         match m {
-            WM_HOTKEY => self.on_hotkey(),
+            WM_HOTKEY => self.fire_hotkey(),
             WM_APP_MUTE => self.on_mute(wp.0 != 0),
             WM_APP_DEVICES => self.arm_devices(),
             WM_CLOSE => self.exit(),
@@ -1178,6 +1212,13 @@ unsafe extern "system" fn wndproc(h: HWND, m: u32, wp: WPARAM, lp: LPARAM) -> LR
     if m != 0 && m == reg().remote {
         return LRESULT(on_remote(m, wp, lp));
     }
+    if m == WM_INPUT {
+        // Read now: the raw handle dies with DefWindowProc, so it can't be deferred.
+        if let Some((vk, is_break)) = hotkey::read_raw_key(lp) {
+            with_state(None, |s| s.on_raw_key(vk, is_break)); // ponytail: dropped while the tray menu is open
+        }
+        return unsafe { DefWindowProcW(h, m, wp, lp) };
+    }
     if is_ours(m)
         && with_state(Some((m, wp, lp)), |s| {
             s.handle(m, wp, lp);
@@ -1296,6 +1337,9 @@ pub fn run() -> i32 {
             }
         }
     }
+    if let Err(e) = hotkey::register_raw_sink(hwnd) {
+        log!("raw input sink failed: {e}");
+    }
     let audio = match audio::Audio::new(hwnd) {
         Ok(a) => a,
         Err(e) => {
@@ -1326,6 +1370,8 @@ pub fn run() -> i32 {
         settings_child: None,
         settings_proc: None,
         hotkey_paused: false,
+        raw_down: false,
+        last_hotkey_at: None,
         last_reload_code: 0,
         talk_meter: None,
         talk: TalkDetector::new(),

@@ -66,7 +66,7 @@ pub fn apply_mod(mods: u32, vk: u32, is_break: bool) -> u32 {
     }
 }
 
-fn held_mods() -> u32 {
+pub fn held_mods() -> u32 {
     let down = |vk: i32| unsafe { GetAsyncKeyState(vk) } as u16 & 0x8000 != 0;
     let mut m = 0;
     if down(0x11) {

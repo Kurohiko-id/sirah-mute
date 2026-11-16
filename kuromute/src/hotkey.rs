@@ -1,8 +1,13 @@
 use crate::config::Hotkey;
-use std::time::Duration;
-use windows::Win32::Foundation::HWND;
+use std::mem::size_of;
+use std::time::{Duration, Instant};
+use windows::Win32::Foundation::{HWND, LPARAM};
 use windows::Win32::UI::Input::KeyboardAndMouse::{
     GetAsyncKeyState, HOT_KEY_MODIFIERS, RegisterHotKey, UnregisterHotKey,
+};
+use windows::Win32::UI::Input::{
+    GetRawInputData, HRAWINPUT, RAWINPUT, RAWINPUTDEVICE, RAWINPUTHEADER, RID_INPUT,
+    RIDEV_INPUTSINK, RIM_TYPEKEYBOARD, RegisterRawInputDevices,
 };
 
 pub const MOD_ALT: u32 = 1;
@@ -123,9 +128,60 @@ pub fn cough_release(held: Duration, threshold_ms: u32) -> bool {
     held >= Duration::from_millis(threshold_ms as u64)
 }
 
+/// Keyboard Raw Input sink on the core window. A foreground app that registers raw input with
+/// RIDEV_NOHOTKEYS (League of Legends in game) blocks RegisterHotKey, but not this.
+pub fn register_raw_sink(hwnd: HWND) -> windows::core::Result<()> {
+    let rid = [RAWINPUTDEVICE {
+        usUsagePage: 0x01,
+        usUsage: 0x06,
+        dwFlags: RIDEV_INPUTSINK,
+        hwndTarget: hwnd,
+    }];
+    unsafe { RegisterRawInputDevices(&rid, size_of::<RAWINPUTDEVICE>() as u32) }
+}
+
+/// (vk, is_break) from a WM_INPUT keyboard packet.
+pub fn read_raw_key(lp: LPARAM) -> Option<(u32, bool)> {
+    let mut buf = [0u8; 256];
+    let mut size = buf.len() as u32;
+    let n = unsafe {
+        GetRawInputData(
+            HRAWINPUT(lp.0 as _),
+            RID_INPUT,
+            Some(buf.as_mut_ptr().cast()),
+            &mut size,
+            size_of::<RAWINPUTHEADER>() as u32,
+        )
+    };
+    if n == u32::MAX {
+        return None;
+    }
+    let ri = unsafe { &*(buf.as_ptr() as *const RAWINPUT) };
+    if ri.header.dwType != RIM_TYPEKEYBOARD.0 {
+        return None;
+    }
+    let k = unsafe { ri.data.keyboard };
+    Some((k.VKey as u32, k.Flags & 1 != 0)) // RI_KEY_BREAK
+}
+
+/// One press can arrive as both WM_HOTKEY and WM_INPUT; the second within this window is dropped.
+pub const DEDUP: Duration = Duration::from_millis(100);
+
+pub fn should_fire(last: Option<Instant>, now: Instant) -> bool {
+    last.is_none_or(|t| now.duration_since(t) >= DEDUP)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn dedup_drops_second_path_of_same_press() {
+        let t0 = Instant::now();
+        assert!(should_fire(None, t0));
+        assert!(!should_fire(Some(t0), t0 + Duration::from_millis(5)));
+        assert!(should_fire(Some(t0), t0 + DEDUP));
+    }
 
     #[test]
     fn cough_release_threshold() {
