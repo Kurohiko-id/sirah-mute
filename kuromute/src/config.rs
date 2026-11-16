@@ -255,6 +255,10 @@ pub fn parse(bytes: &[u8]) -> Option<Config> {
 }
 
 fn backup_corrupt(path: &Path) -> LoadOutcome {
+    // ponytail: elevated = no rename (moving files in a user-writable folder invites a junction attack); Unreadable keeps the file and blocks saves until an unelevated run
+    if crate::admin::is_elevated() {
+        return LoadOutcome::Unreadable("corrupt; not renamed while elevated".into());
+    }
     let mut name = path.file_name().unwrap_or_default().to_os_string();
     name.push(".bad");
     let backup = path.with_file_name(name);

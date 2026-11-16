@@ -41,8 +41,12 @@ fn token_info<T: Default>(class: TOKEN_INFORMATION_CLASS) -> Option<T> {
     }
 }
 
+/// Cached: a process's elevation never changes, and the logger asks on every line.
 pub fn is_elevated() -> bool {
-    token_info::<TOKEN_ELEVATION>(TokenElevation).is_some_and(|e| e.TokenIsElevated != 0)
+    static E: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *E.get_or_init(|| {
+        token_info::<TOKEN_ELEVATION>(TokenElevation).is_some_and(|e| e.TokenIsElevated != 0)
+    })
 }
 
 /// The signed-in user is an administrator: already elevated, or an admin running with the

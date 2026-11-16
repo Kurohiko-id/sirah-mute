@@ -59,7 +59,10 @@ fn rotate(dir: &Path, max_bytes: u64, keep: usize) {
 }
 
 fn append(dir: &Path, msg: &str) {
-    rotate(dir, MAX_BYTES, KEEP);
+    // ponytail: elevated = no rotation (moving/deleting files in a user-writable folder invites a junction attack); the log grows until an unelevated run rotates it
+    if !crate::admin::is_elevated() {
+        rotate(dir, MAX_BYTES, KEEP);
+    }
     if let Ok(mut f) = OpenOptions::new()
         .create(true)
         .append(true)
