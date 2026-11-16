@@ -1,6 +1,3 @@
-// wired up in Task 2 (run-as-admin plan)
-#![allow(dead_code)]
-
 use std::ffi::c_void;
 use std::os::windows::process::CommandExt;
 use std::path::{Component, Path, PathBuf};
@@ -9,6 +6,11 @@ use std::process::Command;
 use windows::Win32::Foundation::{CloseHandle, HANDLE};
 use windows::Win32::Security::{GetTokenInformation, TOKEN_ELEVATION, TOKEN_QUERY, TokenElevation};
 use windows::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
+use windows::Win32::UI::WindowsAndMessaging::{FindWindowW, PostMessageW, WM_CLOSE};
+use windows::core::PCWSTR;
+
+use crate::log;
+use crate::msg::WINDOW_CLASS;
 
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
@@ -204,6 +206,63 @@ pub fn open_unelevated(target: &str) {
         .spawn();
 }
 
+/// True = hand startup to the elevated task (caller then exits).
+pub fn relaunch_decision(run_as_admin: bool, elevated: bool, from_task: bool, in_pf: bool) -> bool {
+    run_as_admin && !elevated && !from_task && in_pf
+}
+
+/// Asks the running core to quit and waits up to 5 s for its window to go away.
+fn close_core() {
+    unsafe {
+        let Ok(h) = FindWindowW(WINDOW_CLASS, PCWSTR::null()) else {
+            return;
+        };
+        let _ = PostMessageW(Some(h), WM_CLOSE, Default::default(), Default::default());
+        for _ in 0..50 {
+            std::thread::sleep(std::time::Duration::from_millis(100));
+            if FindWindowW(WINDOW_CLASS, PCWSTR::null()).is_err() {
+                return;
+            }
+        }
+    }
+}
+
+/// `--admin-on` / `--admin-off`: switch the mode and restart the core. 0 = ok, 1 = failed.
+pub fn helper(on: bool) -> i32 {
+    let exe = match std::env::current_exe() {
+        Ok(e) if is_elevated() && in_program_files(&e, &program_files_dirs()) => e,
+        _ => {
+            log!("admin: helper refused (not elevated or not under Program Files)");
+            return 1;
+        }
+    };
+    let r = if on {
+        // Missing or unreadable config: the Config default (autostart on).
+        let logon = crate::config::read(&crate::config::config_path())
+            .ok()
+            .flatten()
+            .unwrap_or_default()
+            .autostart;
+        create_task(logon).map(|()| {
+            close_core();
+            run_task()
+        })
+    } else {
+        delete_task().map(|()| {
+            close_core();
+            open_unelevated(&exe.to_string_lossy());
+            Ok(())
+        })
+    };
+    match r.and_then(|x| x) {
+        Ok(()) => 0,
+        Err(e) => {
+            log!("admin: helper {}: {e}", if on { "on" } else { "off" });
+            1
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -278,6 +337,15 @@ mod tests {
         assert_eq!(user_id("PC", "X", "Budi"), r"PC\Budi");
         assert_eq!(user_id("", "X", "Budi"), r"X\Budi");
         assert_eq!(user_id("", "", "Budi"), "Budi");
+    }
+
+    #[test]
+    fn relaunch_decision_table() {
+        assert!(relaunch_decision(true, false, false, true));
+        assert!(!relaunch_decision(false, false, false, true)); // mode off
+        assert!(!relaunch_decision(true, true, false, true)); // already elevated
+        assert!(!relaunch_decision(true, false, true, true)); // started by the task: never loop
+        assert!(!relaunch_decision(true, false, false, false)); // not in Program Files
     }
 
     #[test]

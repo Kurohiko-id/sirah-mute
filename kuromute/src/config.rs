@@ -117,6 +117,7 @@ pub struct Config {
     pub talk_warn_mic_id: Option<String>,
     pub cough_hold: bool,
     pub cough_hold_ms: u32,
+    pub run_as_admin: bool,
     pub other_mics: Vec<OtherMic>,
     #[serde(deserialize_with = "other_pos_or_default")]
     pub other_mics_position: Position,
@@ -150,6 +151,7 @@ impl Default for Config {
             talk_warn_mic_id: None,
             cough_hold: false,
             cough_hold_ms: 400,
+            run_as_admin: false,
             other_mics: Vec::new(),
             other_mics_position: Position::BottomLeft,
         }
@@ -507,6 +509,19 @@ mod tests {
             load(&std::env::temp_dir().join("sirahmute-nonexistent/config.json")),
             LoadOutcome::Missing
         );
+    }
+
+    #[test]
+    fn run_as_admin_default_roundtrip_and_bad_value() {
+        assert!(!Config::default().run_as_admin);
+        let c = Config {
+            run_as_admin: true,
+            ..Config::default()
+        };
+        let back = parse(&serde_json::to_vec(&c).unwrap()).unwrap();
+        assert!(back.run_as_admin);
+        let c = parse(br#"{"run_as_admin": "yes", "cough_hold": true}"#).unwrap();
+        assert!(!c.run_as_admin && c.cough_hold);
     }
 
     #[test]

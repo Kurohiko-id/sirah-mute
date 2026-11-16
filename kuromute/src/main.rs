@@ -87,6 +87,26 @@ fn list_devices() {
     }
 }
 
+/// Opt-in "Run as administrator": hand startup to the elevated task. Must run before the core's mutex.
+fn relaunch_to_task(from_task: bool) -> bool {
+    let run_as_admin = config::read(&config::config_path())
+        .ok()
+        .flatten()
+        .is_some_and(|c| c.run_as_admin);
+    let in_pf = std::env::current_exe()
+        .is_ok_and(|e| admin::in_program_files(&e, &admin::program_files_dirs()));
+    if !admin::relaunch_decision(run_as_admin, admin::is_elevated(), from_task, in_pf) {
+        return false;
+    }
+    match admin::run_task() {
+        Ok(()) => true,
+        Err(e) => {
+            log!("admin: relaunch failed, continuing unelevated: {e}");
+            false
+        }
+    }
+}
+
 fn main() {
     unsafe {
         let _ = SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
@@ -120,7 +140,15 @@ fn main() {
             Some(_guard) => settings::ui::run(),
             None => 0,
         },
-        _ => app::run(),
+        Some("--admin-on") => admin::helper(true),
+        Some("--admin-off") => admin::helper(false),
+        arg => {
+            if relaunch_to_task(arg == Some("--from-task")) {
+                0
+            } else {
+                app::run()
+            }
+        }
     };
     log::flush();
     std::process::exit(code);

@@ -30,12 +30,12 @@ use windows::Win32::System::Threading::{
 };
 use windows::Win32::UI::Shell::{NIN_BALLOONUSERCLICK, NIN_SELECT, ShellExecuteW};
 use windows::Win32::UI::WindowsAndMessaging::{
-    CreateWindowExW, DefWindowProcW, DispatchMessageW, FindWindowW, GetMessageW, KillTimer, MSG,
-    PBT_APMRESUMEAUTOMATIC, PostMessageW, PostQuitMessage, RegisterClassExW,
-    RegisterWindowMessageW, SMTO_ABORTIFHUNG, SPI_SETWORKAREA, SW_SHOWNORMAL, SendMessageTimeoutW,
-    SetTimer, TranslateMessage, WINDOW_EX_STYLE, WM_CLOSE, WM_CONTEXTMENU, WM_DISPLAYCHANGE,
-    WM_DPICHANGED, WM_ENDSESSION, WM_HOTKEY, WM_LBUTTONUP, WM_POWERBROADCAST, WM_SETTINGCHANGE,
-    WM_TIMER, WNDCLASSEXW, WS_OVERLAPPED,
+    ChangeWindowMessageFilterEx, CreateWindowExW, DefWindowProcW, DispatchMessageW, FindWindowW,
+    GetMessageW, KillTimer, MSG, MSGFLT_ALLOW, PBT_APMRESUMEAUTOMATIC, PostMessageW,
+    PostQuitMessage, RegisterClassExW, RegisterWindowMessageW, SMTO_ABORTIFHUNG, SPI_SETWORKAREA,
+    SW_SHOWNORMAL, SendMessageTimeoutW, SetTimer, TranslateMessage, WINDOW_EX_STYLE, WM_CLOSE,
+    WM_CONTEXTMENU, WM_DISPLAYCHANGE, WM_DPICHANGED, WM_ENDSESSION, WM_HOTKEY, WM_LBUTTONUP,
+    WM_POWERBROADCAST, WM_SETTINGCHANGE, WM_TIMER, WNDCLASSEXW, WS_OVERLAPPED,
 };
 use windows::core::{HSTRING, PCWSTR, w};
 
@@ -171,6 +171,10 @@ pub(crate) fn is_release_url(url: &str) -> bool {
 }
 
 pub(crate) fn open_url(url: &str) {
+    if crate::admin::is_elevated() {
+        crate::admin::open_unelevated(url);
+        return;
+    }
     unsafe {
         ShellExecuteW(
             None,
@@ -729,6 +733,26 @@ impl State {
     }
 
     fn apply_autostart(&self) {
+        if self.cfg.run_as_admin {
+            // The elevated task replaces the Run key; only an elevated core may touch it.
+            if crate::admin::is_elevated() {
+                if let Err(e) = autostart::apply(false) {
+                    log!("autostart: {e}");
+                }
+                if let Err(e) = crate::admin::create_task(self.cfg.autostart) {
+                    log!("autostart: task: {e}");
+                }
+            } else {
+                static LOGGED: std::sync::atomic::AtomicBool =
+                    std::sync::atomic::AtomicBool::new(false);
+                if !LOGGED.swap(true, std::sync::atomic::Ordering::Relaxed) {
+                    log!(
+                        "autostart: run_as_admin but not elevated; leaving Run key and task alone"
+                    );
+                }
+            }
+            return;
+        }
         if let Err(e) = autostart::apply(self.cfg.autostart) {
             log!("autostart: {e}");
         }
@@ -1277,6 +1301,15 @@ pub fn run() -> i32 {
             return 1;
         }
     };
+    if crate::admin::is_elevated() {
+        // UIPI: let unelevated --toggle/--status/settings/explorer reach this window.
+        let r = reg();
+        for m in [r.reload, r.show, r.toggle, r.pause, r.remote, r.taskbar] {
+            unsafe {
+                let _ = ChangeWindowMessageFilterEx(hwnd, m, MSGFLT_ALLOW, None);
+            }
+        }
+    }
     let audio = match audio::Audio::new(hwnd) {
         Ok(a) => a,
         Err(e) => {
