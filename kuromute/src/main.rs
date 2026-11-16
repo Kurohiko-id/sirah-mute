@@ -1,4 +1,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+mod admin;
 mod app;
 mod audio;
 mod autostart;
