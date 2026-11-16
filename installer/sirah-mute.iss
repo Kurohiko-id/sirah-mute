@@ -177,7 +177,7 @@ begin
   Result := RegKeyExists(HKCU, Key) or RegKeyExists(HKLM, Key);
 end;
 
-{ Runs an Inno uninstall command line from the registry; the exe part may be quoted. }
+{ Runs an Inno uninstall command line from the registry as the original user; the exe part may be quoted. }
 procedure RunUninstallString(Cmd: String);
 var
   Exe, Args: String;
@@ -198,7 +198,11 @@ begin
     if P = 0 then begin Exe := Cmd; Args := ''; end
     else begin Exe := Copy(Cmd, 1, P - 1); Args := Trim(Copy(Cmd, P + 1, MaxInt)); end;
   end;
-  Exec(Exe, Args, '', SW_HIDE, ewWaitUntilTerminated, Code);
+  { The command comes from user-writable HKCU, so it must not run elevated. }
+  if not ExecAsOriginalUser(Exe, Args, '', SW_HIDE, ewWaitUntilTerminated, Code) then
+    Log('Per-user uninstall could not start: ' + SysErrorMessage(Code))
+  else if Code <> 0 then
+    Log('Per-user uninstall exited with code ' + IntToStr(Code));
 end;
 
 { An all-users install replaces a per-user copy of this app, so it is not installed twice. }
