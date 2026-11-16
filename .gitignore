@@ -9,3 +9,6 @@ kuromute/target/
 
 # Promo images stay local (not published)
 assets/promo/
+
+# Plans, specs and research notes stay local
+docs/
