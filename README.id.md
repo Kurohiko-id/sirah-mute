@@ -35,7 +35,7 @@ Gw Kurohiko. Gw udah batuk bertahun-tahun, jadi pas stream gw sering banget penc
 
 ## Install
 
-Unduh **SirahMute-Setup.exe** (per-user secara default, tidak perlu admin; ada juga opsi "Install for all users") atau zip portable dari [Releases](../../releases/latest).
+Unduh **SirahMute-Setup.exe** (installer menanyakan "Install for all users" atau "Install for me only": all users adalah default dan dibutuhkan untuk **Jalankan sebagai admin**; me only tidak perlu hak admin) atau zip portable dari [Releases](../../releases/latest).
 
 > **Windows SmartScreen:** rilis belum di-code-sign, jadi Windows bisa nampilin "Windows protected your PC". Klik **More info → Run anyway**.
 
@@ -53,7 +53,7 @@ Ini butuh akun Windows administrator dan opsi **Install for all users** di insta
 
 Sirah Mute bisa dikontrol lewat PowerShell atau command line, jadi HASS Agent bisa mute, unmute, dan baca status mic. Aplikasinya harus lagi jalan.
 
-Path di bawah untuk install per-user (default). Kalau pakai **Install for all users**, app-nya ada di `C:\Program Files\SirahMute\sirahmute.exe`: pakai `& "$env:ProgramFiles\SirahMute\sirahmute.exe"` di PowerShell dan `"%ProgramFiles%\SirahMute\sirahmute.exe"` di tipe Custom.
+Path di bawah untuk install **Install for me only**. Kalau pakai **Install for all users** (default), app-nya ada di `C:\Program Files\SirahMute\sirahmute.exe`: pakai `& "$env:ProgramFiles\SirahMute\sirahmute.exe"` di PowerShell dan `"C:\Program Files\SirahMute\sirahmute.exe"` di tipe Custom. Tulis path lengkap di situ: `%ProgramFiles%` di dalam tanda kutip gagal karena ada spasi di `Program Files`.
 
 Dari PowerShell:
 

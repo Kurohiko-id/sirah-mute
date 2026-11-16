@@ -35,7 +35,7 @@ I'm Kurohiko. I've had a cough for years, so on stream I hit mute a lot. The pro
 
 ## Install
 
-Download **SirahMute-Setup.exe** (per-user by default, no admin needed; it also offers "Install for all users") or the portable zip from [Releases](../../releases/latest).
+Download **SirahMute-Setup.exe** (it asks "Install for all users" or "Install for me only": all users is the default and needed for **Run as administrator**; me only needs no admin rights) or the portable zip from [Releases](../../releases/latest).
 
 > **Windows SmartScreen:** releases aren't code-signed yet, so Windows may say "Windows protected your PC". Click **More info → Run anyway**.
 
@@ -53,7 +53,7 @@ It needs a Windows administrator account and the installer's **Install for all u
 
 Sirah Mute can be controlled from PowerShell or the command line, so HASS Agent can mute, unmute and report the mic state. The app must be running.
 
-The paths below are for the default per-user install. With **Install for all users** the app is in `C:\Program Files\SirahMute\sirahmute.exe`: use `& "$env:ProgramFiles\SirahMute\sirahmute.exe"` in PowerShell and `"%ProgramFiles%\SirahMute\sirahmute.exe"` in the Custom type.
+The paths below are for an **Install for me only** install. With **Install for all users** (the default) the app is in `C:\Program Files\SirahMute\sirahmute.exe`: use `& "$env:ProgramFiles\SirahMute\sirahmute.exe"` in PowerShell and `"C:\Program Files\SirahMute\sirahmute.exe"` in the Custom type. Write the full path there: `%ProgramFiles%` inside the quotes fails because of the space in `Program Files`.
 
 From PowerShell:
 
