@@ -1,4 +1,5 @@
-; Sirah Mute per-user installer (Inno Setup 6).
+; Sirah Mute installer (Inno Setup 6). Supports both per-user and all-users installs
+; (the setup asks: PrivilegesRequiredOverridesAllowed=dialog).
 ; Build:  ISCC /DMyAppVersion=2.0.0 /DExePath=<path\to\sirahmute.exe> installer\sirah-mute.iss
 ; Output: installer\Output\SirahMute-Setup-<version>.exe
 ;
@@ -28,10 +29,12 @@ AppPublisher=Kurohiko
 AppPublisherURL={#MyAppURL}
 AppSupportURL={#MyAppURL}/issues
 AppUpdatesURL={#MyAppURL}/releases
-DefaultDirName={localappdata}\Programs\SirahMute
+DefaultDirName={autopf}\SirahMute
 DisableDirPage=auto
 DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
+PrivilegesRequiredOverridesAllowed=dialog
+UsePreviousPrivileges=no
 SetupIconFile=..\kuromute\assets\sirah.ico
 UninstallDisplayIcon={app}\{#MyAppExeName}
 UninstallDisplayName={#MyAppName}
@@ -174,8 +177,47 @@ begin
   Result := RegKeyExists(HKCU, Key) or RegKeyExists(HKLM, Key);
 end;
 
+{ Runs an Inno uninstall command line from the registry; the exe part may be quoted. }
+procedure RunUninstallString(Cmd: String);
+var
+  Exe, Args: String;
+  P, Code: Integer;
+begin
+  Cmd := Trim(Cmd);
+  if Cmd = '' then Exit;
+  if Cmd[1] = '"' then
+  begin
+    Delete(Cmd, 1, 1);
+    P := Pos('"', Cmd);
+    if P = 0 then Exit;
+    Exe := Copy(Cmd, 1, P - 1);
+    Args := Trim(Copy(Cmd, P + 1, MaxInt));
+  end else
+  begin
+    P := Pos(' ', Cmd);
+    if P = 0 then begin Exe := Cmd; Args := ''; end
+    else begin Exe := Copy(Cmd, 1, P - 1); Args := Trim(Copy(Cmd, P + 1, MaxInt)); end;
+  end;
+  Exec(Exe, Args, '', SW_HIDE, ewWaitUntilTerminated, Code);
+end;
+
+{ An all-users install replaces a per-user copy of this app, so it is not installed twice. }
+procedure RemovePerUserInstall;
+var
+  Key, Cmd: String;
+begin
+  Key := 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{B131B4B2-6950-40F6-AD60-8683270943B1}_is1';
+  if not RegKeyExists(HKCU, Key) then Exit;
+  if RegQueryStringValue(HKCU, Key, 'QuietUninstallString', Cmd) and (Trim(Cmd) <> '') then
+    RunUninstallString(Cmd)
+  else if RegQueryStringValue(HKCU, Key, 'UninstallString', Cmd) and (Trim(Cmd) <> '') then
+    RunUninstallString(Cmd + ' /VERYSILENT /SUPPRESSMSGBOXES /NORESTART');
+end;
+
 procedure CurStepChanged(CurStep: TSetupStep);
 begin
+  if (CurStep = ssInstall) and IsAdminInstallMode then
+    RemovePerUserInstall;
   if (CurStep = ssDone) and LegacyInstalled and not WizardSilent then
     MsgBox('Sirah Mute replaces Kuro MuteMic. It takes over the old settings and autostart the first time it runs.' + #13#10 + #13#10 +
       'You can uninstall the old "Kuro MuteMic" from Settings > Apps.', mbInformation, MB_OK);
@@ -188,8 +230,15 @@ begin
 end;
 
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+var
+  Code: Integer;
 begin
   { Settings in %APPDATA%\SirahMute are kept on purpose (reinstall keeps your setup). }
   if CurUninstallStep = usPostUninstall then
+  begin
     RegDeleteValue(HKCU, 'Software\Microsoft\Windows\CurrentVersion\Run', 'SirahMute');
+    { The "Run as administrator" task exists only for all-users installs. }
+    if IsAdminInstallMode then
+      Exec(ExpandConstant('{sys}\schtasks.exe'), '/Delete /TN "SirahMute-' + GetUserNameString + '" /F', '', SW_HIDE, ewWaitUntilTerminated, Code);
+  end;
 end;
