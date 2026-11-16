@@ -47,11 +47,13 @@ Sirah Mute is the new version of Kuro Mute. It picks up your old settings automa
 
 Windows doesn't let normal apps see your keys while an app running as administrator is focused (OBS as admin, some games, Task Manager). To fix it, turn on **Settings → General → Run as administrator**. It asks for permission once when you turn it on, and there is no prompt at sign-in.
 
-It needs the installer's **Install for all users** option (Program Files). If you installed per-user, run the installer again and pick it. Your settings are kept and the per-user copy is removed.
+It needs a Windows administrator account and the installer's **Install for all users** option (Program Files). If you installed per-user, run the installer again and pick it. Your settings are kept and the per-user copy is removed.
 
 ## Home Assistant (HASS Agent)
 
 Sirah Mute can be controlled from PowerShell or the command line, so HASS Agent can mute, unmute and report the mic state. The app must be running.
+
+The paths below are for the default per-user install. With **Install for all users** the app is in `C:\Program Files\SirahMute\sirahmute.exe`: use `& "$env:ProgramFiles\SirahMute\sirahmute.exe"` in PowerShell and `"%ProgramFiles%\SirahMute\sirahmute.exe"` in the Custom type.
 
 From PowerShell:
 

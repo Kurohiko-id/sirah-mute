@@ -45,13 +45,15 @@ Sirah Mute adalah versi baru Kuro Mute. Settingan lama otomatis kebawa waktu per
 
 ### Hotkey tidak jalan di game atau OBS?
 
-Windows tidak membolehkan aplikasi biasa melihat tombol kalian saat aplikasi yang berjalan sebagai administrator sedang aktif (OBS sebagai admin, beberapa game, Task Manager). Solusinya, nyalakan **Settings → General → Run as administrator**. Izinnya diminta sekali saat dinyalakan, dan tidak ada prompt saat sign-in.
+Windows tidak membolehkan aplikasi biasa melihat tombol kalian saat aplikasi yang berjalan sebagai administrator sedang aktif (OBS sebagai admin, beberapa game, Task Manager). Solusinya, nyalakan **Pengaturan → Umum → Jalankan sebagai admin**. Izinnya diminta sekali saat dinyalakan, dan tidak ada prompt saat sign-in.
 
-Ini butuh opsi **Install for all users** di installer (Program Files). Kalau sebelumnya install per-user, jalankan installer lagi dan pilih opsi itu. Pengaturan tetap aman dan salinan per-user dihapus.
+Ini butuh akun Windows administrator dan opsi **Install for all users** di installer (Program Files). Kalau sebelumnya install per-user, jalankan installer lagi dan pilih opsi itu. Pengaturan tetap aman dan salinan per-user dihapus.
 
 ## Home Assistant (HASS Agent)
 
 Sirah Mute bisa dikontrol lewat PowerShell atau command line, jadi HASS Agent bisa mute, unmute, dan baca status mic. Aplikasinya harus lagi jalan.
+
+Path di bawah untuk install per-user (default). Kalau pakai **Install for all users**, app-nya ada di `C:\Program Files\SirahMute\sirahmute.exe`: pakai `& "$env:ProgramFiles\SirahMute\sirahmute.exe"` di PowerShell dan `"%ProgramFiles%\SirahMute\sirahmute.exe"` di tipe Custom.
 
 Dari PowerShell:
 
