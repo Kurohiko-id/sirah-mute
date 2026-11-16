@@ -257,9 +257,15 @@ pub fn helper(on: bool) -> i32 {
             .flatten()
             .unwrap_or_default()
             .autostart;
-        create_task(logon)
-            .and_then(|()| close_core())
-            .and_then(|()| run_task())
+        create_task(logon).and_then(|()| {
+            let r = close_core().and_then(|()| run_task());
+            if r.is_err()
+                && let Err(e) = delete_task()
+            {
+                log!("admin: rollback delete_task: {e}");
+            }
+            r
+        })
     } else {
         delete_task()
             .and_then(|()| close_core())
