@@ -11,11 +11,12 @@ use std::os::windows::ffi::OsStrExt;
 use std::rc::Rc;
 
 /// (checkbox enabled, hint override). Only a Program Files install can own the elevated task.
-fn admin_row(in_pf: bool) -> (bool, Option<Key>) {
+/// A checked box stays enabled so it can always be turned off.
+fn admin_row(in_pf: bool, on: bool) -> (bool, Option<Key>) {
     if in_pf {
         (true, None)
     } else {
-        (false, Some(Key::AdminNeedsAllUsers))
+        (on, Some(Key::AdminNeedsAllUsers))
     }
 }
 
@@ -29,9 +30,10 @@ fn after_helper(want: bool, exit_ok: bool) -> (bool, Option<Key>) {
 }
 
 fn set_admin_note(w: &MainWindow) {
+    let on = w.get_gen_admin();
     let in_pf = std::env::current_exe()
         .is_ok_and(|e| crate::admin::in_program_files(&e, &crate::admin::program_files_dirs()));
-    let (enabled, hint) = admin_row(in_pf);
+    let (enabled, hint) = admin_row(in_pf, on);
     w.set_gen_admin_enabled(enabled);
     let key = hint.unwrap_or(Key::AdminHint);
     w.set_gen_admin_note(i18n::t(selected_lang(w), key).into());
@@ -40,8 +42,8 @@ fn set_admin_note(w: &MainWindow) {
 /// Runs `sirahmute.exe --admin-on/--admin-off` elevated (UAC prompt unless already elevated)
 /// and waits for it. A declined prompt or any launch error counts as failure.
 fn run_helper(on: bool) -> bool {
-    use windows::Win32::Foundation::CloseHandle;
-    use windows::Win32::System::Threading::{GetExitCodeProcess, INFINITE, WaitForSingleObject};
+    use windows::Win32::Foundation::{CloseHandle, WAIT_OBJECT_0};
+    use windows::Win32::System::Threading::{GetExitCodeProcess, WaitForSingleObject};
     use windows::Win32::UI::Shell::{SEE_MASK_NOCLOSEPROCESS, SHELLEXECUTEINFOW, ShellExecuteExW};
     use windows::Win32::UI::WindowsAndMessaging::SW_HIDE;
     use windows::core::{PCWSTR, w};
@@ -71,8 +73,12 @@ fn run_helper(on: bool) -> bool {
         if info.hProcess.is_invalid() {
             return false;
         }
-        // the helper caps its own waits at a few seconds
-        WaitForSingleObject(info.hProcess, INFINITE);
+        // UAC prompt plus the helper's own few-second waits fit in 30 s
+        if WaitForSingleObject(info.hProcess, 30_000) != WAIT_OBJECT_0 {
+            crate::log!("settings: admin helper timed out");
+            let _ = CloseHandle(info.hProcess);
+            return false;
+        }
         let mut code = 1u32;
         let ok = GetExitCodeProcess(info.hProcess, &mut code).is_ok();
         let _ = CloseHandle(info.hProcess);
@@ -137,7 +143,10 @@ pub fn setup(w: &MainWindow, state: &Rc<RefCell<State>>, refreshers: Vec<Rc<dyn 
         if let Some(k) = err {
             w.set_gen_admin_error(i18n::t(selected_lang(&w), k).into());
             st.borrow_mut().cfg.run_as_admin = value;
-            commit(&st, &w);
+            if !matches!(commit(&st, &w), SaveOutcome::Saved(_)) {
+                crate::log!("settings: could not save reverted run_as_admin={value}");
+                w.set_gen_admin_error(i18n::t(selected_lang(&w), Key::AdminFailed).into());
+            }
         }
     });
 
@@ -240,8 +249,16 @@ mod tests {
 
     #[test]
     fn admin_row_state() {
-        assert_eq!(admin_row(true), (true, None));
-        assert_eq!(admin_row(false), (false, Some(Key::AdminNeedsAllUsers)));
+        assert_eq!(admin_row(true, false), (true, None));
+        assert_eq!(admin_row(true, true), (true, None));
+        assert_eq!(
+            admin_row(false, false),
+            (false, Some(Key::AdminNeedsAllUsers))
+        );
+        assert_eq!(
+            admin_row(false, true),
+            (true, Some(Key::AdminNeedsAllUsers))
+        );
     }
 
     #[test]

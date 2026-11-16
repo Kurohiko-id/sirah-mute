@@ -244,7 +244,8 @@ fn close_core() -> Result<(), String> {
 /// `--admin-on` / `--admin-off`: switch the mode and restart the core. 0 = ok, 1 = failed.
 pub fn helper(on: bool) -> i32 {
     let exe = match std::env::current_exe() {
-        Ok(e) if is_elevated() && in_program_files(&e, &program_files_dirs()) => e,
+        // turning off only deletes a task, so it needs no Program Files check
+        Ok(e) if is_elevated() && (!on || in_program_files(&e, &program_files_dirs())) => e,
         _ => {
             log!("admin: helper refused (not elevated or not under Program Files)");
             return 1;
@@ -267,9 +268,14 @@ pub fn helper(on: bool) -> i32 {
             r
         })
     } else {
-        delete_task()
-            .and_then(|()| close_core())
-            .map(|()| open_unelevated(&exe.to_string_lossy()))
+        delete_task().map(|()| {
+            // the task is gone, so the mode is off at next start: later failures are non-fatal
+            if let Err(e) = close_core() {
+                log!("admin: helper off: close_core: {e}");
+            } else {
+                open_unelevated(&exe.to_string_lossy());
+            }
+        })
     };
     match r {
         Ok(()) => 0,
