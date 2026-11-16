@@ -70,13 +70,28 @@ pub fn in_program_files(exe: &Path, pf_dirs: &[PathBuf]) -> bool {
     })
 }
 
+/// From the known-folder API, not env vars, which a user can override.
 pub fn program_files_dirs() -> Vec<PathBuf> {
-    ["ProgramFiles", "ProgramW6432", "ProgramFiles(x86)"]
-        .iter()
-        .filter_map(std::env::var_os)
-        .filter(|v| !v.is_empty())
-        .map(PathBuf::from)
-        .collect()
+    use windows::Win32::System::Com::CoTaskMemFree;
+    use windows::Win32::UI::Shell::{
+        FOLDERID_ProgramFiles, FOLDERID_ProgramFilesX64, FOLDERID_ProgramFilesX86,
+        KNOWN_FOLDER_FLAG, SHGetKnownFolderPath,
+    };
+    [
+        FOLDERID_ProgramFiles,
+        FOLDERID_ProgramFilesX64,
+        FOLDERID_ProgramFilesX86,
+    ]
+    .iter()
+    .filter_map(|id| unsafe {
+        let p = SHGetKnownFolderPath(id, KNOWN_FOLDER_FLAG(0), None).ok()?;
+        let s = p.to_string().ok();
+        CoTaskMemFree(Some(p.0 as *const c_void));
+        s
+    })
+    .filter(|s| !s.is_empty())
+    .map(PathBuf::from)
+    .collect()
 }
 
 pub fn task_name(user: &str) -> String {
@@ -124,10 +139,19 @@ pub fn task_xml(exe: &Path, user_id: &str) -> String {
     )
 }
 
+/// The token's user name, not the USERNAME env var.
 fn user_name() -> Result<String, String> {
-    match std::env::var("USERNAME") {
-        Ok(u) if !u.is_empty() => Ok(u),
-        _ => Err("USERNAME not set".into()),
+    use windows::Win32::System::WindowsProgramming::GetUserNameW;
+    let mut buf = [0u16; 257]; // UNLEN + 1
+    let mut len = buf.len() as u32;
+    unsafe { GetUserNameW(Some(windows::core::PWSTR(buf.as_mut_ptr())), &mut len) }
+        .map_err(|e| format!("GetUserNameW: {e}"))?;
+    // len counts the terminating NUL
+    let u = String::from_utf16_lossy(&buf[..len.saturating_sub(1) as usize]);
+    if u.is_empty() {
+        Err("empty user name".into())
+    } else {
+        Ok(u)
     }
 }
 
@@ -374,6 +398,18 @@ mod tests {
         assert!(!relaunch_decision(true, true, false, true)); // already elevated
         assert!(!relaunch_decision(true, false, true, true)); // started by the task: never loop
         assert!(!relaunch_decision(true, false, false, false)); // not in Program Files
+    }
+
+    #[test]
+    fn os_lookups_match_a_normal_session() {
+        let pf = program_files_dirs();
+        let env_pf = PathBuf::from(std::env::var_os("ProgramFiles").unwrap());
+        assert!(in_program_files(&env_pf.join("x.exe"), &pf), "{pf:?}");
+        assert!(
+            user_name()
+                .unwrap()
+                .eq_ignore_ascii_case(&std::env::var("USERNAME").unwrap())
+        );
     }
 
     #[test]
