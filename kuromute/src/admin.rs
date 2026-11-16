@@ -249,10 +249,14 @@ pub fn helper(on: bool) -> i32 {
     let r = if on {
         create_task().and_then(|()| {
             let r = close_core().and_then(|()| run_task());
-            if r.is_err()
-                && let Err(e) = delete_task()
-            {
-                log!("admin: rollback delete_task: {e}");
+            if r.is_err() {
+                if let Err(e) = delete_task() {
+                    log!("admin: rollback delete_task: {e}");
+                }
+                // the core closed (or exited late after a timeout): never leave the user without one
+                if !crate::app::core_running() {
+                    open_unelevated(&exe.to_string_lossy());
+                }
             }
             r
         })
