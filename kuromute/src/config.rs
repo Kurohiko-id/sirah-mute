@@ -212,6 +212,10 @@ pub enum LoadOutcome {
 }
 
 pub fn load(path: &Path) -> LoadOutcome {
+    load_as(path, crate::admin::is_elevated())
+}
+
+fn load_as(path: &Path, elevated: bool) -> LoadOutcome {
     let bytes = match fs::read(path) {
         Ok(b) => b,
         Err(e) if e.kind() == io::ErrorKind::NotFound => return LoadOutcome::Missing,
@@ -219,7 +223,7 @@ pub fn load(path: &Path) -> LoadOutcome {
     };
     match parse(&bytes) {
         Some(c) => LoadOutcome::Loaded(c),
-        None => backup_corrupt(path),
+        None => backup_corrupt(path, elevated),
     }
 }
 
@@ -254,9 +258,9 @@ pub fn parse(bytes: &[u8]) -> Option<Config> {
         .map(Config::sanitized)
 }
 
-fn backup_corrupt(path: &Path) -> LoadOutcome {
+fn backup_corrupt(path: &Path, elevated: bool) -> LoadOutcome {
     // ponytail: elevated = no rename (moving files in a user-writable folder invites a junction attack); Unreadable keeps the file and blocks saves until an unelevated run
-    if crate::admin::is_elevated() {
+    if elevated {
         return LoadOutcome::Unreadable("corrupt; not renamed while elevated".into());
     }
     let mut name = path.file_name().unwrap_or_default().to_os_string();
@@ -403,7 +407,7 @@ mod tests {
         let p = d.join("config.json");
         fs::write(d.join("config.json.bad"), "old").unwrap();
         fs::write(&p, "{\"mic_id\": \"{0.0.1").unwrap();
-        match load(&p) {
+        match load_as(&p, false) {
             LoadOutcome::Corrupt { backup } => {
                 assert!(backup.exists());
                 assert!(backup.ends_with("config.json.bad"));
@@ -419,11 +423,20 @@ mod tests {
         let p = d.join("config.json");
         fs::write(d.join("config.json.bad"), "old").unwrap();
         fs::write(&p, "{broken").unwrap();
-        assert!(matches!(load(&p), LoadOutcome::Corrupt { .. }));
+        assert!(matches!(load_as(&p, false), LoadOutcome::Corrupt { .. }));
         assert_eq!(
             fs::read_to_string(d.join("config.json.bad")).unwrap(),
             "{broken"
         );
+        fs::remove_dir_all(&d).unwrap();
+    }
+    #[test]
+    fn elevated_keeps_corrupt_file() {
+        let d = tmp("elev");
+        let p = d.join("config.json");
+        fs::write(&p, "{broken").unwrap();
+        assert!(matches!(load_as(&p, true), LoadOutcome::Unreadable(_)));
+        assert!(p.exists() && !d.join("config.json.bad").exists());
         fs::remove_dir_all(&d).unwrap();
     }
     #[test]
