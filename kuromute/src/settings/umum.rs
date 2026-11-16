@@ -10,10 +10,13 @@ use std::cell::RefCell;
 use std::os::windows::ffi::OsStrExt;
 use std::rc::Rc;
 
-/// (checkbox enabled, hint override). Only a Program Files install can own the elevated task.
-/// A checked box stays enabled so it can always be turned off.
-fn admin_row(in_pf: bool, on: bool) -> (bool, Option<Key>) {
-    if in_pf {
+/// (checkbox enabled, hint override). Only a Program Files install can own the elevated task,
+/// and only an administrator account can elevate. A checked box stays enabled so it can always
+/// be turned off.
+fn admin_row(in_pf: bool, on: bool, is_admin: bool) -> (bool, Option<Key>) {
+    if !is_admin && !on {
+        (false, Some(Key::AdminNeedsAdminAccount))
+    } else if in_pf {
         (true, None)
     } else {
         (on, Some(Key::AdminNeedsAllUsers))
@@ -33,7 +36,7 @@ fn set_admin_note(w: &MainWindow) {
     let on = w.get_gen_admin();
     let in_pf = std::env::current_exe()
         .is_ok_and(|e| crate::admin::in_program_files(&e, &crate::admin::program_files_dirs()));
-    let (enabled, hint) = admin_row(in_pf, on);
+    let (enabled, hint) = admin_row(in_pf, on, crate::admin::user_is_admin());
     w.set_gen_admin_enabled(enabled);
     let key = hint.unwrap_or(Key::AdminHint);
     w.set_gen_admin_note(i18n::t(selected_lang(w), key).into());
@@ -249,16 +252,17 @@ mod tests {
 
     #[test]
     fn admin_row_state() {
-        assert_eq!(admin_row(true, false), (true, None));
-        assert_eq!(admin_row(true, true), (true, None));
-        assert_eq!(
-            admin_row(false, false),
-            (false, Some(Key::AdminNeedsAllUsers))
-        );
-        assert_eq!(
-            admin_row(false, true),
-            (true, Some(Key::AdminNeedsAllUsers))
-        );
+        use Key::{AdminNeedsAdminAccount as NoAdmin, AdminNeedsAllUsers as NoPf};
+        assert_eq!(admin_row(true, false, true), (true, None));
+        assert_eq!(admin_row(true, true, true), (true, None));
+        assert_eq!(admin_row(false, false, true), (false, Some(NoPf)));
+        assert_eq!(admin_row(false, true, true), (true, Some(NoPf)));
+        // a standard user can't elevate as themselves
+        assert_eq!(admin_row(true, false, false), (false, Some(NoAdmin)));
+        assert_eq!(admin_row(false, false, false), (false, Some(NoAdmin)));
+        // a checked box stays enabled so it can be turned off
+        assert_eq!(admin_row(true, true, false), (true, None));
+        assert_eq!(admin_row(false, true, false), (true, Some(NoPf)));
     }
 
     #[test]

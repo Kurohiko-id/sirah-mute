@@ -4,7 +4,10 @@ use std::path::{Component, Path, PathBuf};
 use std::process::Command;
 
 use windows::Win32::Foundation::{CloseHandle, HANDLE, WAIT_OBJECT_0};
-use windows::Win32::Security::{GetTokenInformation, TOKEN_ELEVATION, TOKEN_QUERY, TokenElevation};
+use windows::Win32::Security::{
+    GetTokenInformation, TOKEN_ELEVATION, TOKEN_ELEVATION_TYPE, TOKEN_INFORMATION_CLASS,
+    TOKEN_QUERY, TokenElevation, TokenElevationType, TokenElevationTypeLimited,
+};
 use windows::Win32::System::Threading::{
     GetCurrentProcess, OpenProcess, OpenProcessToken, PROCESS_SYNCHRONIZE, WaitForSingleObject,
 };
@@ -18,25 +21,35 @@ use crate::msg::WINDOW_CLASS;
 
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
-pub fn is_elevated() -> bool {
+/// One fixed-size value from this process's token; `None` on any error.
+fn token_info<T: Default>(class: TOKEN_INFORMATION_CLASS) -> Option<T> {
     unsafe {
         let mut token = HANDLE::default();
-        if OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &mut token).is_err() {
-            return false;
-        }
-        let mut elev = TOKEN_ELEVATION::default();
+        OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &mut token).ok()?;
+        let mut v = T::default();
         let mut len = 0u32;
         let ok = GetTokenInformation(
             token,
-            TokenElevation,
-            Some(&mut elev as *mut _ as *mut c_void),
-            size_of::<TOKEN_ELEVATION>() as u32,
+            class,
+            Some(&mut v as *mut T as *mut c_void),
+            size_of::<T>() as u32,
             &mut len,
         )
         .is_ok();
         let _ = CloseHandle(token);
-        ok && elev.TokenIsElevated != 0
+        ok.then_some(v)
     }
+}
+
+pub fn is_elevated() -> bool {
+    token_info::<TOKEN_ELEVATION>(TokenElevation).is_some_and(|e| e.TokenIsElevated != 0)
+}
+
+/// The signed-in user is an administrator: already elevated, or an admin running with the
+/// limited half of a split token. A standard user (Default type, not elevated) or an error = false.
+pub fn user_is_admin() -> bool {
+    is_elevated()
+        || token_info::<TOKEN_ELEVATION_TYPE>(TokenElevationType) == Some(TokenElevationTypeLimited)
 }
 
 fn lower_components(p: &Path) -> Vec<String> {

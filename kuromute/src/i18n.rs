@@ -119,6 +119,7 @@ pub enum Key {
     AdminLabel,
     AdminHint,
     AdminNeedsAllUsers,
+    AdminNeedsAdminAccount,
     AdminFailed,
     VersionLabel,
     SecUpdates,
@@ -152,7 +153,7 @@ pub enum Key {
 
 impl Key {
     #[cfg(test)]
-    pub const ALL: [Key; 123] = [
+    pub const ALL: [Key; 124] = [
         Key::Muted,
         Key::Unmuted,
         Key::MicDisconnected,
@@ -247,6 +248,7 @@ impl Key {
         Key::AdminLabel,
         Key::AdminHint,
         Key::AdminNeedsAllUsers,
+        Key::AdminNeedsAdminAccount,
         Key::AdminFailed,
         Key::VersionLabel,
         Key::SecUpdates,
@@ -498,6 +500,8 @@ pub fn t(l: ResolvedLang, k: Key) -> &'static str {
         (AdminNeedsAllUsers, Id) => {
             "Perlu Sirah Mute yang di-install untuk semua pengguna. Jalankan installer lagi dan pilih \"Install for all users\"."
         }
+        (AdminNeedsAdminAccount, En) => "Needs a Windows administrator account.",
+        (AdminNeedsAdminAccount, Id) => "Perlu akun Windows administrator.",
         (AdminFailed, En) => {
             "Couldn't change it. Permission was declined or Task Scheduler failed; see the log."
         }
